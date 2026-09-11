@@ -19,12 +19,14 @@ Les sept artefacts copiés vers `models/generic-v1` sont identiques au candidat 
 |---|---|---|
 | Branches fiscales | **12/12 attentes réussies** | Oui/Non/inconnu dans les années actives ; neutralité hors horizon. Source conservée, entrées identiques après sauvegarde/réouverture. |
 | Sensibilités | **57/57 comparaisons et 14/14 attentes réussies** | 24 copies scalaires, trois tables, écart maximal nul. Entrées, formules, protections et instruments préservés ; quatre critères d'effet réel des axes réussis. |
-| WACC via service qualifié | **Préparé** | 229 valeurs sourcées, 12 déclarations, 8 attentes dont WACC 9 % et DCF de 992 383,998460928 €. Adoption et affichage qualifié à vérifier. |
-| Opérations commerciales | **Préparé** | Trois dossiers, 197 attentes et six refus : capacité/FIFO/prix signé, acomptes/PCA/FAE, stocks/fournisseurs/TVA/BFR. |
+| WACC via service qualifié | **8/8 attentes et 8/8 contrôles réussis** | 229 valeurs sourcées, 12 déclarations, résolution native puis version 2 adoptée. WACC 0,0900000000881 et DCF 992 383,9972167 €, affichés par le service qualifié ; source et modèle préservés. |
+| Opérations commerciales | **197/197 attentes et 6/6 refus réussis** | Trois dossiers : capacité/FIFO/prix signé (62), acomptes/PCA/FAE (65), stocks/fournisseurs/TVA/BFR (70). Sources, entrées et modèle préservés ; versions inchangées après les refus. |
 
 Les gardes fiscales corrigent un défaut réellement observé : des `#N/A` d'années hors horizon contaminaient une consolidation de cash active via `SUMPRODUCT`. La correction neutralise les seules années inactives et conserve l'indisponibilité d'une année active non qualifiée.
 
 La base de sensibilité donne un cash minimal de −48 000 € et un cash final de 305 400 €. Le reçu final est `TABLES_VERIFIEES`, après 2 316,58 secondes. Cette recette exerce le calcul natif directement : elle ne constitue pas une adoption par un dossier métier qualifié. Ses 44 erreurs `#N/A` sont limitées au DCF non qualifié ; aucune n'appartient aux autres périmètres. Le protocole d'adoption du service est testé séparément.
+
+La recette WACC utilise le vrai service et un dossier fictif dont les hypothèses sont explicitement fixées. Les cinq périmètres deviennent `DISPONIBLE_SUR_PREREQUIS_QUALIFIES` après la résolution. Les références indépendantes sont 9 % et 992 383,998460928 € ; l'écart de valorisation est inférieur à deux centimes. L'adoption, l'incrément de révision et la lecture qualifiée des cellules D7 et D40 sont vérifiés. Aucun processus Excel ne subsiste après l'opération.
 
 ## Recettes natives antérieures conservées
 
@@ -32,7 +34,7 @@ La base de sensibilité donne un cash minimal de −48 000 € et un cash final 
 |---|---|---|
 | `17623a7947cd…` | **123/123 attentes, huit refus** | Sept cas d'actifs et aides : crédit-bail, services en fin de bail, taux positif, échéance d'un mois, aide accordée/base, tranches différées et aide d'exploitation. |
 | `6c3e37153aa7…` | **WACC réussi** | Taux 0,09000000008806794 ; DCF 992 383,9972167194 €, contre 992 383,998460928 € attendu. 108 évaluations, résidu inférieur à 10⁻¹⁰, sauvegarde/réouverture et entrées préservées. |
-| `6c3e37153aa7…` | **191/197 puis six adresses d'oracles corrigées** | Quatre attentes FIFO visaient une ligne inexistante ; deux stocks visaient la mauvaise ligne du bilan. Les bonnes adresses satisfont les six attentes. Le reçu initial reste en échec ; une campagne neuve est préparée sur 1.1.2. |
+| `6c3e37153aa7…` | **191/197 puis six adresses d'oracles corrigées** | Quatre attentes FIFO visaient une ligne inexistante ; deux stocks visaient la mauvaise ligne du bilan. Les bonnes adresses satisfont les six attentes. Le reçu initial reste en échec ; la campagne neuve sur 1.1.2 réussit les 197 attentes sans correction pendant son exécution. |
 | `ff5ad2f940c5…` | **15 oracles sur trois dossiers** | Services : CA/coûts/recrutement daté ; fabrication : CA/coûts/CAPEX cash/amortissement ; recherche : dette/intérêts/apport. |
 | Variante calendrier antérieure | **Oracle 2032 réussi** | Trois exercices à partir du 1er janvier 2030. Changement de formule, scellement et calcul natif ; aucune approbation nominative ou migration fabriquée. |
 
@@ -51,6 +53,10 @@ Les trois parcours fictifs sur le vrai service et la trame finale réussissent *
 Les corrections finales du diagnostic de maintenance ont passé 20 tests ciblés. Les deux tests du protocole de recette WACC et de qualification du modèle ont aussi réussi. Le diagnostic d'installation a été vérifié après retrait des noms exacts des fichiers de référence.
 
 La copie autonome finale du code, sans trame ni sources, a exécuté 360 tests : **338 réussites et 22 sauts explicites liés à l'absence de modèle**, puis neuf étapes de la fenêtre cachée. Aucun fichier source n'a changé pendant ce contrôle. Python et ses dépendances proviennent du poste ; ce contrôle ne prouve ni une nouvelle installation ni une exécution distante GitHub. Le serveur MCP est exercé par son entrée stdio.
+
+La [CI GitHub du commit logiciel `f2fcdae`](https://github.com/chantheo974/Agent-IA-BP/actions/runs/34646578763) a ensuite réussi sur Windows et Python 3.14 : installation des dépendances, 360 tests en 87,53 secondes (338 réussites, 22 sauts explicites), puis contrôle de la fenêtre. Elle ne contient pas de modèle privé et n'exécute aucun calcul Excel. Les changements de documentation postérieurs ne modifient pas ce code testé.
+
+La première exécution distante reste en échec : la sonde d'extraction utilisait `-I`, qui conserve les hooks du site Python d'une installation éditable. Le problème a été reproduit dans le `.venv` local. La sonde utilise maintenant `-I -S`, vérifie l'absence de chargement du site et conserve toutes ses assertions de provenance. Ses 21 tests ciblés ont réussi avant la seconde CI. Ce contrôle du cœur autonome n'exerce pas l'import PDF ni l'installation du pack client.
 
 ## Conservation et confidentialité
 

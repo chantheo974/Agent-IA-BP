@@ -1,6 +1,6 @@
 # État de livraison — TCA BP 0.2.0
 
-L'application Windows et son moteur de saisie sont construits en Python 3.14. La trame courante est le build **1.1.2**, modèle `tca-bp-template/1`. La réception native des sensibilités et le contrôle final du pack sont en cours ; les reçus terminés sont distingués des essais encore ouverts.
+L'application Windows et son moteur de saisie sont construits en Python 3.14. La trame courante est le build **1.1.2**, modèle `tca-bp-template/1`. Ce document décrit la version locale 0.2.0, ses fonctions et ses limites ; la recette identifie séparément chaque preuve logicielle et native.
 
 Le plan initial est conservé dans son état d'origine. Les dix documents initiaux ont été audités et leurs empreintes sont restées inchangées. Le premier pack 0.1.0 est archivé et retiré de la distribution ; cette version le remplace après correction des commentaires hérités.
 
@@ -9,7 +9,7 @@ Le plan initial est conservé dans son état d'origine. Les dix documents initia
 | Périmètre | Comportement |
 |---|---|
 | Trame | 33 feuilles, 297 champs, 14 315 entrées autorisées, 809 défauts calculés, 363 865 formules protégées ; registres client vidés et offres à identifiants génériques stables. |
-| Connaissance | 33 contrats et 33 fiches, calculs clés relus, unités, contraintes, dépendances, questions et scénarios de test documentés. Le graphe distingue les formules, noms, défauts, tables et la résolution WACC. |
+| Connaissance | 33 contrats et 33 fiches, 297 définitions explicites avec unités, bases, calendriers et propriétaires métier. Les 809 défauts sont liés à leurs formules et références. Un contrat sémantique incompatible suspend les champs concernés. Le graphe distingue les formules, noms, défauts, tables et la résolution WACC. |
 | Dossiers | État SQLite, client et dossier identifiés, sources locales, copies versionnées, journaux et reprise. La version exacte du modèle est archivée par empreintes et conservée lors d'une mise à jour. |
 | Propositions | Saisie par champs ou registre, état prospectif du lot, aperçu, sources du même dossier, refus de formule libre et de plan périmé, rejeu idempotent. Les propositions de plusieurs agents sont conciliées avant préparation ; un conflit suspend le seul lot concerné. |
 | Qualifications | États explicites, inactivité déclarée sans effacer les valeurs, sources vérifiées, revue fiscale datée et cinq périmètres de disponibilité. Une hypothèse ne devient pas confirmée après un calcul. |
@@ -43,6 +43,6 @@ L'application est locale, destinée à un utilisateur Windows. La protection des
 
 ## Guides et vérifications
 
-[Interface](INTERFACE.md), [qualifications](QUALIFICATIONS.md), [versions](MODELES_ET_VERSIONS.md), [conflits](PROPOSITIONS_ET_CONFLITS.md), [WACC](model_wacc.md), [sensibilités](model_sensitivity.md), [distribution](DISTRIBUTION.md).
+[Interface](INTERFACE.md), [catalogue sémantique](CATALOGUE_SEMANTIQUE.md), [qualifications](QUALIFICATIONS.md), [versions](MODELES_ET_VERSIONS.md), [conflits](PROPOSITIONS_ET_CONFLITS.md), [WACC](model_wacc.md), [sensibilités](model_sensitivity.md), [distribution](DISTRIBUTION.md).
 
 Dans le dépôt TCA, les tests sont exécutables avec `py -3.14 -m unittest discover -s tests -v`. Les recettes natives demandent Microsoft Excel et sont lancées séparément sur des dossiers fictifs. Le pack client utilise la trame déjà construite et n'inclut ni les références privées, ni les jeux de test, ni leurs reçus internes.

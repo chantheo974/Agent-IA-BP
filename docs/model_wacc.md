@@ -17,3 +17,42 @@ Après le recalcul complet, le travailleur sauvegarde une copie, la rouvre et v�
 Le reçu JSON accompagne la copie. Toute saisie ultérieure invalide la preuve ; un changement de source ou de qualification invalide la disponibilité financière. Une vérification des sensibilités peut conserver une preuve WACC courante seulement si elle démontre la conservation des cinq sorties et de la même signature d'entrée.
 
 La recette logicielle comporte des fonctions synthétiques pour les limites de recherche et un dossier Excel fictif sans dette : taux sans risque de 3 %, bêta de 1,2, prime de marché de 5 % et primes additionnelles nulles, soit un WACC attendu de 9 %. L'equity attendue est calculée séparément depuis trois flux de 72 000 euros et une croissance terminale fictive de 2 %. Ces données ne sont pas des valeurs par défaut du modèle distribué.
+
+## Recette native avec le service du 11 septembre 2026
+
+`tools/validate_qualified_wacc.py` a exécuté le véritable `Application.solve_wacc`
+sur le dossier fictif `test_qualifications_wacc`. La préparation, les identifiants,
+la révision, la source et les quatre composants du modèle épinglé ont été
+contrôlés avant le lancement. Aucun résultat préexistant n'a été injecté.
+
+La campagne `runtime/recette_qualifications_service_20260911_215456_eec175`
+a terminé avec **8 oracles sur 8** et **8 contrôles de service sur 8** réussis.
+Le reçu est `validation_service_wacc.json`.
+
+- Trame 1.1.2 : `e4c1c5fd256359f52a18e3b68b958058e1295b4bb6b1a0a97abc9e2b815b2c12`.
+- Source : `ed9f798812a4fc5be83c5c481d769f03dcbb827da5e0e8e6b7ebd897c90d3009`.
+- Copie adoptée : `dfaf623732a8226fc6ba043cabe80299254359681e81f44271a1b2a7f2471d44`.
+
+Le taux obtenu est `0,09000000008806794`, pour une attente indépendante de 9 %.
+La valeur des fonds propres est `992383,9972167194` euros, contre une attente
+de `992383,998460928` euros ; l'écart est inférieur à la tolérance de 0,02 euro.
+Les six autres oracles contrôlent les ventes et les coûts directs des trois
+exercices.
+
+La transaction a créé la révision 2 et adopté la copie. La source et la trame
+restent inchangées ; la preuve WACC et les sorties sont courantes. Les cinq
+périmètres CA, COGS, FISCALITE, CASH et DCF sont disponibles sur leurs prérequis
+qualifiés. La lecture réelle `Application.inspect` de D7 et D40 expose les
+valeurs attendues : le masque de qualification est effectivement levé pour ce
+cas. Ce contrôle du service ne remplace pas une recette interactive de tous les
+écrans de l'interface.
+
+Le reçu natif reste `adopted:false` avant la transaction ; le reçu de service et
+l'historique attestent `adopted:true` après son engagement. Les macros et
+l'itération globale sont désactivées. Aucun processus Excel ne subsistait au
+contrôle suivant l'opération.
+
+Cette preuve concerne un cas sans dette et cette version exacte de trame. Elle
+ne démontre ni tous les cas économiques avec dette, ni une unicité globale,
+ni une validation indépendante des hypothèses d'un client. Les tests des refus
+et limites numériques sont identifiés séparément comme tests logiciels.
