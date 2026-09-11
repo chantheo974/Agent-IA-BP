@@ -193,9 +193,13 @@ assert not (root / 'unused').exists()
 assert not (root / 'exemple').exists()
 assert not (root / 'tools').exists()
 assert not (root / 'tests').exists()
+assert sys.flags.isolated and sys.flags.no_site
 print(json.dumps({'status':'PASS','agents':33,'case_created':True,'isolated':bool(sys.flags.isolated)}))
 '''
-        run = subprocess.run([sys.executable, "-I", "-X", "utf8", "-c", script, str(extracted), str(self.base / "isolated-data")],
+        # -I conserve les hooks du site système, dont ceux d'un pip install -e.
+        # -S exclut ces chemins indirects pour cette sonde du coeur autonome.
+        # Les imports PDF optionnels et l'installation sont hors de sa portée.
+        run = subprocess.run([sys.executable, "-I", "-S", "-X", "utf8", "-c", script, str(extracted), str(self.base / "isolated-data")],
                              cwd=self.base, capture_output=True, text=True, encoding="utf-8", timeout=45)
         self.assertEqual(run.returncode, 0, run.stderr[-2500:])
         self.assertEqual(json.loads(run.stdout)["status"], "PASS")
