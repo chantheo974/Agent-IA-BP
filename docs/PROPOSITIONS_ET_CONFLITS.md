@@ -1,0 +1,19 @@
+# Réconcilier un lot de propositions d’agents
+
+Le coordinateur compare les propositions avant toute préparation Excel. Un conflit ou une question ouverte suspend uniquement le lot soumis. Les autres demandes du dossier restent possibles ; aucune partie du lot conflictuel n’est appliquée automatiquement.
+
+Chaque proposition comporte `agent_id` (identifiant de l’un des 33 contrats, par exemple `AGENT_03` pour Control), `context`, `updates` et, éventuellement, `questions`. Le contexte reprend exactement `case_id`, `client_id`, `model_id`, `model_ref`, `template_sha256`, `schema_sha256`, `revision` et `source_sha256` depuis la lecture du dossier. Pour ce dernier champ, utiliser son `sha256` courant. Les propositions d’un même lot doivent porter le même contexte.
+
+Un changement contient `sheet`, `cell`, `value`, `status`, `reason` et `evidence` ; `field_id` peut identifier le champ. Les permissions `replace_existing` et `override_default` restent des booléens explicites. La valeur nulle requiert NON_RENSEIGNE ; une valeur renseignée porte CONFIRME ou HYPOTHESE. INACTIF ne neutralise pas une cellule. Les formules libres et les cellules hors catalogue sont refusées.
+
+Le coordinateur fusionne les propositions dont la valeur, le statut et les permissions concordent. Il conserve les auteurs, justifications et sources ; le service vérifie l’appartenance et l’empreinte de **toutes** les sources concordantes, même lorsqu’une seule est choisie comme preuve principale de la cellule. Un désaccord de statut ne peut pas promouvoir une hypothèse en donnée confirmée. Un désaccord de permission ne peut pas autoriser un remplacement.
+
+`Coordinator.merge_proposals(proposals, expected_context=...)` est une fonction de réconciliation sans écriture. Son résultat contient `status`, `updates`, `contributions`, `conflicts`, `questions`, `refusals` et une empreinte du lot. Les propositions structurées restent des suggestions ; l’identifiant de l’agent ne lui accorde aucun droit supplémentaire. `origin="document"` est refusé : une pièce jointe est une source, jamais une autorisation d’exécuter ou de modifier une règle.
+
+`Application.prepare_agent_proposals(case_id, proposals, request_id)` utilise la même normalisation et la même préparation centrale que les autres interfaces. Un lot prêt retourne un plan PRET_A_APPLIQUER ; il reste à appliquer par le parcours de validation existant. Un lot suspendu ouvre des questions dans le dossier et retourne NEEDS_REVIEW, NEEDS_INPUT ou REFUSED, sans créer de plan partiel. La provenance du lot est enregistrée avant la préparation afin qu’une reprise après incident ne puisse substituer d’autres auteurs ou sources sous le même identifiant de demande.
+
+Le contexte attendu est recontrôlé **sous le verrou de préparation**. Un changement de version entre la fusion et la préparation est refusé. La répétition exacte d’une demande déjà appliquée retourne DEJA_APPLIQUE sans nouvelle écriture. Pour une décision corrigée après arbitrage, utiliser un nouvel identifiant de demande et un contexte relu. Les réponses aux questions constituent des sources ; elles ne sélectionnent pas automatiquement une des valeurs concurrentes.
+
+Accès CLI : `py -3.14 -m tca_bp prepare-agent-proposals <dossier> <propositions.json> --request-id <identifiant>`. Le fichier contient une liste JSON de propositions. Accès MCP : `bp_prepare_agent_proposals`, mêmes arguments `case_id`, `proposals` et `request_id`. Ces actions enregistrent la préparation ou les questions ; elles n’écrivent aucune cellule Excel.
+
+`tests/test_agent_proposals.py` contient les cas indépendants : fusion de preuves concordantes, conflits de valeur/statut/permission, absence d’autorité documentaire, isolement inter-dossier, poursuite d’un lot indépendant, concurrence de révision, reprise après échec, répétition après application, chemins CLI et MCP. Tous utilisent des dossiers fictifs temporaires et aucun Excel natif.

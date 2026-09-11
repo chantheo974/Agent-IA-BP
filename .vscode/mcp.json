@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "tca-bp": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["${workspaceFolder}/run_mcp.py"]
+    }
+  }
+}

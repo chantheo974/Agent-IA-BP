@@ -1,0 +1,33 @@
+[
+  {
+    "name": "Calendrier fictif : trois exercices de 2030 à 2032 inclus",
+    "fictional": true,
+    "updates": [
+      {
+        "sheet": "Control",
+        "cell": "C10",
+        "value": "2030-01-01",
+        "reason": "Donnée fictive indépendante pour vérifier un horizon de trois exercices.",
+        "evidence": "TEST_FICTIF_CALENDRIER_2030",
+        "replace_existing": true
+      },
+      {
+        "sheet": "Control",
+        "cell": "C59",
+        "value": 3,
+        "reason": "Les exercices fictifs attendus sont 2030, 2031 et 2032 inclus.",
+        "evidence": "TEST_FICTIF_CALENDRIER_2030",
+        "replace_existing": true
+      }
+    ],
+    "outputs": [
+      {
+        "sheet": "Control",
+        "cell": "C60",
+        "expected": 2032,
+        "tolerance": 0
+      }
+    ],
+    "include_tables": false
+  }
+]

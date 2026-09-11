@@ -1,0 +1,13 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+# Ces octets sont contrôlés par les empreintes du fournisseur.
+tca_bp/vendor/vendor/olefile/** -text -whitespace
+*.xlsm -text
+*.xlsx -text
+*.zip -text
+*.pdf -text
+*.pptx -text

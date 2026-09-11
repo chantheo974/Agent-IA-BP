@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tca-bp"
+version = "0.2.0"
+description = "Préparation et pilotage de business plans TCA sur copies Excel contrôlées"
+requires-python = ">=3.14"
+dependencies = ["pypdf>=6.18,<7"]
+
+[project.scripts]
+tca-bp = "tca_bp.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["tca_bp*"]
+
+[tool.setuptools.package-data]
+tca_bp = ["*.ps1", "vendor/*.md", "vendor/vendor/olefile/*.txt", "vendor/vendor/olefile/*.json"]

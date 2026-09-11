@@ -1,0 +1,10 @@
+{
+  "component": "olefile",
+  "version": "0.47",
+  "role": "Lecture stricte du conteneur OLE vbaProject.bin, sans exécution de VBA.",
+  "upstream": "https://github.com/decalage2/olefile",
+  "local_source": "Pack de référence fourni localement et conservé intact ; variante Python 3 uniquement.",
+  "copied_files": ["__init__.py", "olefile.py", "LICENSE.txt"],
+  "integrity": "Les SHA256 de tous les fichiers Python et de la licence sont scellés dans VENDOR_HASHES de vba_fingerprint.py et vérifiés avant chargement. Aucune installation ni import depuis un paquet global.",
+  "license_file": "LICENSE.txt"
+}

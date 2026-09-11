@@ -1,0 +1,8 @@
+[
+  {
+    "sheet": "Control",
+    "cell": "C60",
+    "formula": "YEAR($C$10)+SUM($C$59,-1)",
+    "reason": "Recette technique fictive : réécriture équivalente de la dernière année de l'horizon, sans changement de règle économique."
+  }
+]
