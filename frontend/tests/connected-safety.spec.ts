@@ -59,8 +59,32 @@ async function openGrid(page: Page, sheetId: string) {
   await page.getByLabel('Source de la saisie', { exact: true }).selectOption('source-1');
   await page.getByLabel('Adresse de cellule', { exact: true }).fill('C10');
   await page.getByLabel('Adresse de cellule', { exact: true }).press('Enter');
-  await expect(page.getByLabel('Valeur ou formule de la cellule', { exact: true })).toBeEnabled();
+  const input = page.getByLabel('Valeur ou formule de la cellule', { exact: true });
+  await expect(input).toBeEnabled();
+  await expect(input).toHaveValue('2026');
+  await expect(page.getByTestId('data-grid-canvas')).toBeVisible();
 }
+
+test('sécurité cockpit : un profil reçu après la sélection ne reprend pas le focus de la grille', async ({ page }) => {
+  const { sheet } = await safetyFixture(page);
+  let releaseProfile!: () => void;
+  const profileGate = new Promise<void>(resolve => { releaseProfile = resolve; });
+  await page.route('**/api/cases/*/profile', async route => {
+    await profileGate;
+    await route.fallback();
+  });
+  try {
+    await openGrid(page, sheet.id);
+    const canvas = page.getByTestId('data-grid-canvas');
+    await canvas.focus();
+    await expect(canvas).toBeFocused();
+    releaseProfile();
+    await expect(page).toHaveTitle('Mode expert · Recette protection des saisies');
+    await expect(canvas).toBeFocused();
+  } finally {
+    releaseProfile();
+  }
+});
 
 test('sécurité cockpit : une opération en cours ne disparaît pas lors de la navigation ou du changement de dossier refusés', async ({ page }) => {
   const { state, sheet, other } = await safetyFixture(page);
@@ -102,7 +126,10 @@ test('sécurité cockpit : un collage en attente garde sa révision et ses valeu
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openGrid(page, sheet.id);
   await page.evaluate(() => navigator.clipboard.writeText('2032'));
-  await page.getByTestId('data-grid-canvas').focus();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('2032');
+  const canvas = page.getByTestId('data-grid-canvas');
+  await canvas.focus();
+  await expect(canvas).toBeFocused();
   await page.keyboard.press('Control+v');
   const dialog = page.getByRole('dialog', { name: 'Vérifier le collage', exact: true });
   await expect(dialog).toBeVisible();

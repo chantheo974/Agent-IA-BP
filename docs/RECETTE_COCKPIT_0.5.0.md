@@ -27,7 +27,7 @@ Après l'ajout des projections de résultats par feuille et de sept trajets mét
 
 La suite navigateur de référence comprend **57 tests réussis** : 44 parcours historiques et 13 contrôles du cockpit et de ses protections. Preuve : `runtime/recette_cockpit_front_20260918_2110/playwright57.json`.
 
-La dernière campagne ajoute huit contrôles des sorties structurées : **65 tests réussis**, aucun test ignoré, instable ou en échec (63,985 secondes). Elle comprend les 57 parcours précédents et vérifie notamment la qualification, l'absence de valeur, les trois flux commerciaux et le refus d'afficher des chiffres liés au mauvais dossier, profil, fichier ou numéro de révision.
+La campagne des sorties structurées ajoute huit contrôles : **65 tests réussis**, aucun test ignoré, instable ou en échec (63,985 secondes). Elle comprend les 57 parcours précédents et vérifie notamment la qualification, l'absence de valeur, les trois flux commerciaux et le refus d'afficher des chiffres liés au mauvais dossier, profil, fichier ou numéro de révision.
 
 Le vrai serveur local a aussi été exercé avec un dossier fictif distinct : création d'une source, saisie du calendrier, même proposition retrouvée dans la fiche et la grille après actualisation, formule en lecture seule et dialogue centré. Le classeur et sa révision restent inchangés ; aucun calcul Excel ou appel IA n'est lancé par cette recette. Preuve : `runtime/live_cockpit_ui_20260918_211340/validation.json`, sources et interface compilée inchangées pendant l'essai.
 
@@ -50,6 +50,12 @@ Reçus : `runtime/recette_qualifications_service_20260918_204234_20b5d2/validati
 Les recettes de réalisé, de fiscalité, de financement, de WACC, de sensibilités et d'exports de la version 0.4.0 restent des preuves ciblées du moteur conservé. Elles ne sont pas présentées comme une nouvelle exécution de tous ces calculs à travers chaque écran du cockpit.
 
 ## Distribution et limites de validation
+
+Les premières exécutions GitHub ont révélé deux défauts supplémentaires, corrigés avant la livraison finale : une comparaison de chemins Windows non canoniques dans le conditionnement, et une réponse de profil tardive qui reprenait le focus de la grille avant un collage. La racine de conditionnement est maintenant résolue avant comparaison, sans modifier le contrôle des liens et des sorties du répertoire autorisé. Les 29 tests de conditionnement passent, dont deux régressions couvrant chemins équivalents et junctions Windows.
+
+La perte de focus a été reproduite trois fois avant correction. La mise à jour du titre est désormais indépendante du changement de page ; les quatre contrôles de protection de saisie passent chacun trois fois après correction, soit 12 cas sans échec. Les preuves sont conservées dans `runtime/ci_clipboard_focus_20260918`. Cette correction ne modifie ni l'API ni le moteur financier. Le pack est recompilé et son installation revérifiée pour inclure ce changement.
+
+La suite navigateur complète après correction comporte **66 tests réussis en 62,892 secondes**, aucun test ignoré, instable ou en échec. Reçu : `runtime/recette_cockpit_front_20260918_214604_focus/validation.json`, avec les empreintes de 210 fichiers frontend et de 103 fichiers compilés. Cette campagne remplace la précédente comme contrôle du frontend livré.
 
 Le pack 0.5.0 est distinct du pack 0.4.0 conservé. Son reçu extérieur doit identifier les octets du ZIP, le manifeste, les scripts PowerShell extraits, le modèle initial et le démarrage dans un nouveau répertoire avec espaces. `tools/validate_web_installation.py` vérifie cette installation et les six espaces du cockpit dans un navigateur réel. Node sert à construire et à tester l'interface, pas à l'utiliser.
 

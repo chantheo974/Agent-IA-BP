@@ -61,6 +61,10 @@ def _check_initial_json(raw,name):
 
 def _initial_content(root):
     """Return exactly the sealed initial variant, with its portable provenance."""
+    # TEMP may use a Windows short name or a junction. Compare descendants
+    # against the same canonical root as configured_pin/initial_engine; keep
+    # _regular_file's checks on internal links and escaping files unchanged.
+    root=Path(root).resolve()
     pin=configured_pin(root)
     if pin is None:
         return {},None
@@ -150,6 +154,7 @@ def _check_web_content(files):
 
 
 def collect(root):
+    root=Path(root).resolve()
     files,receipt=base.collect_files(root)
     initial_files,_=_initial_content(root)
     files.update(initial_files)

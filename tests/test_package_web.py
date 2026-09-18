@@ -1,8 +1,12 @@
 """Verify complete web packages without including any client document."""
+from contextlib import contextmanager
 import json
 import hashlib
+import os
+from pathlib import Path
 import shutil
 import unittest
+from unittest.mock import patch
 import zipfile
 from tca_bp.initial_model import CONFIG, ARCHIVES, SCHEMA, initial_engine
 from tca_bp.model_registry import ModelRegistry, model_pin
@@ -113,3 +117,67 @@ class WebPackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'portable|priv|personnel|provenance'):
             package.collect(self.root)
         self.assertFalse(self.output.exists())
+
+    def test_initial_collection_and_temp_verification_normalize_the_same_root(self):
+        engine=fixture(self.root/'candidate',model_id='fixture/initial')
+        pin=ModelRegistry(self.root/ARCHIVES,self.root).register(engine)
+        atomic_json(self.root/CONFIG,{'schema':SCHEMA,**pin})
+        files,expected_pin=package._initial_content(self.root.resolve())
+        # Deterministic on every platform: physical confinement is identical,
+        # while the lexical prefix differs just as with Windows 8.3 TEMP paths.
+        alias=self.root/'..'/self.root.name
+        self.assertNotEqual(alias,self.root.resolve())
+        self.assertEqual(alias.resolve(),self.root.resolve())
+        self.assertEqual(package._initial_content(alias),(files,expected_pin))
+        collected,_=package.collect(alias)
+        self.assertEqual({name:raw for name,raw in collected.items() if package.initial_allowed(name)},files)
+        temporary_directory=package.tempfile.TemporaryDirectory
+        @contextmanager
+        def aliased_temp(**kwargs):
+            with temporary_directory(**kwargs) as value:
+                path=Path(value)
+                yield str(path/'..'/path.name)
+        with patch.object(package.tempfile,'TemporaryDirectory',side_effect=aliased_temp):
+            self.assertEqual(package._verify_initial(files),pin)
+
+    def test_root_directory_alias_is_accepted_but_internal_links_stay_refused(self):
+        def directory_alias(target,link):
+            if os.name=='nt':
+                import _winapi
+                _winapi.CreateJunction(str(target),str(link))
+            else:
+                link.symlink_to(target,target_is_directory=True)
+        def remove_alias(link):
+            if os.name=='nt':
+                self.assertTrue(link.is_junction())
+                link.rmdir()  # remove only the fixture junction, not its target
+            else:
+                self.assertTrue(link.is_symlink())
+                link.unlink()
+        root_alias=self.base/'project alias'
+        directory_alias(self.root.resolve(),root_alias)
+        try:
+            expected,_=package.collect(self.root)
+            actual,_=package.collect(root_alias)
+            self.assertEqual(actual,expected)
+        finally:
+            remove_alias(root_alias)
+        # A root chosen by the caller is canonicalized, but links beneath that
+        # boundary remain forbidden even when their target is still inside it.
+        internal=self.root/'frontend/dist/linked-assets'
+        directory_alias((self.root/'frontend/dist/assets').resolve(),internal)
+        try:
+            with self.assertRaisesRegex(ValueError,'lié|lien'):
+                package.base._regular_file(self.root.resolve(),internal/'main.js')
+        finally:
+            remove_alias(internal)
+        outside=self.base/'outside'
+        outside.mkdir()
+        (outside/'secret.js').write_bytes(b'NE_PAS_LIVRER')
+        directory_alias(outside.resolve(),internal)
+        try:
+            with self.assertRaisesRegex(ValueError,'sort du projet|lié|lien'):
+                package.collect(self.root)
+        finally:
+            remove_alias(internal)
+        self.assertEqual((outside/'secret.js').read_bytes(),b'NE_PAS_LIVRER')

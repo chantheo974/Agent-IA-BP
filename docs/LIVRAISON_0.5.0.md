@@ -1,8 +1,8 @@
 # Livraison TCA BP Web 0.5.0
 
-Cockpit intégré et pack local préparé le 18 septembre 2026. Archive : `dist/TCA_BP_Web_local_0.5.0.zip`, **45 666 923 octets**.
+Cockpit intégré et pack local préparé le 18 septembre 2026. Archive : `dist/TCA_BP_Web_local_0.5.0.zip`, **45 667 467 octets**.
 
-SHA256 : `1157abd0cecbc8a31029acbe99224751578fae754a472f76b8a7fd5f5da491e7`.
+SHA256 : `c2bdda8a10581a453b381c31088bea7a4c17991968a6206e4db801f019e60327`.
 
 ## Utiliser le prototype
 
@@ -16,21 +16,24 @@ Python 3.14 et Excel sont nécessaires. Node n'est pas nécessaire à l'utilisat
 
 L'installation a réussi dans un **nouveau répertoire avec espaces**, sous Python 3.14.3. Les **294 fichiers du manifeste** correspondent exactement aux **295 entrées du ZIP**, manifeste inclus. Les six scripts PowerShell extraits passent le parseur ; l'installation n'appelle pas npm. Le navigateur ouvre les six espaces du cockpit, le catalogue retrouve les 33 feuilles et les 33 agents. Les icônes sont servies avec leur licence. Le modèle initial corrigé reste distinct du modèle générique et correspond aux empreintes du manifeste.
 
-L'essai d'installation ne crée aucun travail Excel ou IA. Son serveur est arrêté. Le contrôle financier est distinct : simulation native avec 12 contrôles et 17 oracles, suivie de 37 contrôles des quatre exports, du réimport identique et de la restauration. Le navigateur a ensuite vérifié les chiffres de cette copie calculée, leurs périodes, unités et cellules sources. Les derniers tests comprennent 65 parcours navigateur et 86 contrôles Python ciblés sur sources figées, en complément de la suite complète de 702 tests décrite avec sa limite d'empreinte dans `RECETTE_COCKPIT_0.5.0.md`.
+L'essai d'installation ne crée aucun travail Excel ou IA. Son serveur est arrêté. Le contrôle financier est distinct : simulation native avec 12 contrôles et 17 oracles, suivie de 37 contrôles des quatre exports, du réimport identique et de la restauration. Le navigateur a ensuite vérifié les chiffres de cette copie calculée, leurs périodes, unités et cellules sources. Les derniers tests comprennent 66 parcours navigateur, les 86 contrôles Python ciblés antérieurs sur sources figées, puis 29 tests de conditionnement. La suite complète de 702 tests est décrite avec sa limite d'empreinte dans `RECETTE_COCKPIT_0.5.0.md` ; ces nombres se recouvrent et ne s'additionnent pas.
+
+Deux corrections issues des premiers contrôles GitHub sont incluses : normalisation des chemins Windows du conditionnement, sans assouplir le confinement ; conservation du focus dans la grille quand le profil de l'entreprise arrive tardivement. Cette dernière anomalie échouait dans trois essais sur trois avant correction ; les 12 cas ciblés puis les 66 tests complets passent après correction. Le pack a été recompilé et réinstallé. L'ancien candidat 0.5.0 est conservé dans `dist/TCA_BP_Web_local_0.5.0_avant_correctif_focus.zip` ; il n'est plus l'archive à utiliser.
 
 Preuves locales :
 
-- `runtime/validation_distribution_0.5.0.json` : reçu extérieur lié aux octets du ZIP, au build et aux vérifications.
-- `runtime/Installation web cockpit 050 20260918_212909 7e6201/recette-installation/validation.json` : installation et lancement.
-- `runtime/recette_cockpit_front_20260918_2125/validation.json` : tests navigateur, deux recettes serveur réel et captures.
-- `runtime/cockpit_pack_source_parity.json` : 177 fichiers du produit identiques aux fichiers du pack, dont le backend, l'interface compilée et les lanceurs.
+- `runtime/validation_distribution_0.5.0_final.json` : reçu final lié aux octets du ZIP, au build, aux sources publiées et aux vérifications. Le reçu sans suffixe `final` reste celui du candidat antérieur.
+- `runtime/Installation web cockpit 050 20260918_215026 62e015/recette-installation/validation.json` : installation et lancement du pack corrigé.
+- `runtime/recette_cockpit_front_20260918_214604_focus/validation.json` : 66 tests navigateur et empreintes des sources et du build.
+- `runtime/live_cockpit_outputs_20260918_214726/validation.json` et `runtime/live_cockpit_ui_20260918_214923/validation.json` : résultats calculés et brouillon sur serveur réel, après correction.
+- Le reçu final vérifie les fichiers du pack contre les sources locales, les transformations documentaires prévues et le manifeste ; le backend demeure identique à celui des recettes natives.
 - `runtime/cockpit_preservation_final.json` : 175 fichiers visuels d'origine inchangés et pack 0.4.0 conservé à l'identique.
 
 La matrice de suivi embarquée dans le ZIP est antérieure à sa vérification d'installation. Ce reçu extérieur et le présent document consignent le résultat final, sans modifier rétroactivement l'archive vérifiée.
 
 ## GitHub et périmètre restant
 
-Les sources sont publiées dans la branche `codex/cockpit-visuel-local` et la [demande de fusion nº 1](https://github.com/chantheo974/Agent-IA-BP/pull/1). Le commit de code livré est `2c1aaabb9da5c80e2bcc2144a1b84c5663df48ff`. Les commits documentaires suivants ajoutent les reçus de livraison et le suivi. Les classeurs, modèles privés, clés et dossiers d'exécution ne sont pas publiés. La demande de fusion reste en brouillon ; elle n'est pas fusionnée dans `main`.
+Les sources sont publiées dans la branche `codex/cockpit-visuel-local` et la [demande de fusion nº 1](https://github.com/chantheo974/Agent-IA-BP/pull/1). Le commit `2c1aaabb9da5c80e2bcc2144a1b84c5663df48ff` introduit le cockpit ; les suivants apportent les corrections et le suivi décrits ici. Le reçu final identifie le commit effectivement publié. Les classeurs, modèles privés, clés et dossiers d'exécution ne sont pas publiés. La demande de fusion reste en brouillon ; elle n'est pas fusionnée dans `main`.
 
 Les limites restent explicites : appel réel au fournisseur IA à tester après saisie d'une clé dans les réglages ; recette native de chaque thème hors ventes via le nouvel écran à compléter ; import complet du réalisé non rejoué dans le nouvel habillage. Les services correspondants sont raccordés et disposent de tests ciblés, mais ces tests ne remplacent pas ces recettes complètes. Une nouvelle tentative d'ajout d'une source documentaire après perte de réponse peut encore créer une entrée documentaire supplémentaire, sans doubler une écriture financière.
 

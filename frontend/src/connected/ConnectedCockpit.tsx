@@ -74,7 +74,10 @@ export default function ConnectedCockpit(app: ConnectedProps) {
     window.addEventListener('cockpit:open-agent-sheet', openAgentSheet);
     return () => window.removeEventListener('cockpit:open-agent-sheet', openAgentSheet);
   }, [catalog.data, router]);
-  useEffect(() => { document.title = `${pageLabel} · ${companyName}`; contentRef.current?.focus({ preventScroll: true }); }, [pathname, pageLabel, companyName]);
+  useEffect(() => { document.title = `${pageLabel} · ${companyName}`; }, [pageLabel, companyName]);
+  // Only navigation moves focus. A late profile response or an SSE refresh must
+  // not take the cursor away from a cell, an input, or an open dialog.
+  useEffect(() => { contentRef.current?.focus({ preventScroll: true }); }, [pathname]);
   useEffect(() => {
     const previous = Object.keys(paletteStyle).map(key => [key, document.documentElement.style.getPropertyValue(key)]);
     Object.entries(paletteStyle).forEach(([key, value]) => document.documentElement.style.setProperty(key, String(value)));
