@@ -4,9 +4,9 @@
 
 ## Active
 
-- [ ] **Intégrer le cockpit fourni au prototype et publier les sources sur GitHub** — reprise fidèle de `visuel web test`, finition des parcours du plan, raccord au moteur, recette et nouveau pack. Suivi : `docs/INTEGRATION_COCKPIT.md`. Originaux et pack 0.4.0 conservés.
-
-- [ ] **Premier essai utilisateur du prototype local 0.4.0** — pack livré le 18 septembre 2026 ; suivre chaque retour avec dossier/révision, action, attendu, obtenu, correction et vérification. Guide et preuves dans `docs/LIVRAISON_0.4.0.md` ; connexion réelle au fournisseur IA encore à valider.
+- [ ] **Premier essai utilisateur du cockpit local 0.5.0** — pack installé et vérifié le 18 septembre 2026 ; suivre chaque retour avec dossier/révision, action, attendu, obtenu, correction et vérification. Guide et preuves dans `docs/LIVRAISON_0.5.0.md`.
+- [ ] **Compléter la recette des autres thèmes via le cockpit** — les registres et paramètres ont des contrôles HTTP, et le moteur possède ses oracles antérieurs ; rejouer séparément les cinq cycles natifs hors ventes dans le nouvel habillage, puis le parcours complet d'import du réalisé. Ne pas confondre ce périmètre avec les recettes C1/C2 déjà réussies.
+- [ ] **Reprise d'un ajout documentaire après réponse perdue** — éviter une entrée documentaire supplémentaire lors d'une nouvelle tentative. Les intentions d'écriture financière restent distinctes et protégées contre les doublons.
 
 ## Waiting On
 
@@ -18,6 +18,8 @@
 - [ ] **Périmètre financier ultérieur** — exercices décalés et instruments convertibles, hors version approuvée.
 
 ## Done
+
+- [x] ~~Cockpit intégré au prototype et sources publiées sur GitHub~~ (2026-09-18) — `dist/TCA_BP_Web_local_0.5.0.zip`, SHA256 `1157abd0cecbc8a31029acbe99224751578fae754a472f76b8a7fd5f5da491e7`. 65 tests navigateur et 86 tests Python ciblés finaux ; simulation Excel native (12 contrôles, 17 oracles), quatre exports/restauration (37 contrôles), lecture des résultats dans le vrai navigateur et installation neuve réussies. Branche `codex/cockpit-visuel-local`, demande de fusion nº 1 en brouillon. Les 175 fichiers visuels d'origine et le ZIP 0.4.0 restent intacts. Les limites C3/C5 et le suivi documentaire restent explicitement ouverts ci-dessus.
 
 - [x] ~~Pack final après correction du profil livré~~ (2026-09-18) — `dist/TCA_BP_Web_local_0.4.0.zip`, SHA256 `ccf9b796f708ee954f80b4334bed32b1a5715da71d1d8e57f29f221d8350b3b6`. Sauvegarde lente corrigée, 44 tests navigateur réussis, sauvegarde/reprise du profil sur deux dossiers avec API réelle, installation neuve et navigation dans les six espaces réussies. 191 fichiers vérifiés, sources et interface compilée concordantes ; serveurs de recette arrêtés. Preuve consolidée : `runtime/validation_distribution_0.4.0.json`. Anciens ZIP et diagnostics conservés. Les recettes financières gardent leurs périmètres documentés ; aucun appel réel au fournisseur IA effectué.
 
