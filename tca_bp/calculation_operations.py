@@ -112,13 +112,22 @@ def execute(app, case_id, operation, timeout):
         try:
             if operation == 'wacc':
                 from .wacc_native import solve_native
-                result = solve_native(source, output, receipt_path, timeout=timeout)
+                extra={'profile':engine.profile} if getattr(engine,'profile',None) else {}
+                result = solve_native(source, output, receipt_path, timeout=timeout,**extra)
                 required_status = 'CONVERGENCE_LOCALE'
             else:
                 from .sensitivity_native import verify_native
                 result = verify_native(engine, source, output, receipt_path, timeout=timeout)
                 required_status = 'TABLES_VERIFIEES'
             receipt_sha = _native_result(result, receipt_path, output, row['sha256'], required_status)
+            profile=getattr(engine,'profile',None)
+            profile_proof={}
+            if profile:
+                from .wacc_native import native_mapping
+                expected_mapping=native_mapping(profile,operation)
+                profile_proof={'profile_sha256':profile['profile_sha256'],'native_mapping_sha256':expected_mapping['mapping_sha256']}
+                if any(result.get(key)!=value for key,value in profile_proof.items()):
+                    raise ValueError('Le reçu natif ne correspond pas au profil métier courant ; copie non adoptée.')
             output_sha = result['output_sha256']
             _unchanged(app, row, basis)
             after = engine.context(output)
@@ -128,7 +137,7 @@ def execute(app, case_id, operation, timeout):
                 raise ValueError('La source ou les qualifications ont changé pendant le calcul ; copie non adoptée.')
             native_proof = {'status': 'VERIFIE', 'workbook_sha256': output_sha,
                             'input_signature': after['input_signature'], 'receipt_path': str(receipt_path),
-                            'receipt_sha256': receipt_sha, **model_pin(row)}
+                            'receipt_sha256': receipt_sha, **model_pin(row), **profile_proof}
             if validate_proof(native_proof, operation, folder, row) is None:
                 raise ValueError('Le reçu ne prouve pas ce calcul et ses entrées ; copie non adoptée.')
             proof = {**result, **model_pin(row), 'status': 'RECALCULE', 'native_operation_status': required_status,
@@ -150,6 +159,9 @@ def execute(app, case_id, operation, timeout):
                     proof['wacc_proof'] = {'status': 'VERIFIE', 'workbook_sha256': output_sha,
                         'input_signature': after['input_signature'], **model_pin(row),
                         'inherited_wacc_proof': old_wacc, 'preserved_by_sensitivity_receipt': native_proof}
+                    if profile:
+                        proof['wacc_proof'].update(profile_sha256=old_wacc.get('profile_sha256'),
+                                                   native_mapping_sha256=old_wacc.get('native_mapping_sha256'))
                     if validate_proof(proof['wacc_proof'], 'wacc', folder, row) is None:
                         raise ValueError('La chaîne de conservation du WACC ne peut plus être validée ; résoudre de nouveau le WACC avant cette conservation.')
             atomic_json(report_path, proof)

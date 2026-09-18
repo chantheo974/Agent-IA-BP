@@ -72,7 +72,10 @@ class Worker:
             self.events.put({'event':'saved'})
         self.returncode=0;self.events.put(None)
     def flush(self):pass
-    def close(self):pass
+    def close(self):
+        self.input_closed=True
+        if self.returncode is None:
+            self.returncode=0;self.events.put(None)
     def poll(self):return self.returncode
     def wait(self,timeout):return self.returncode
     def kill(self):self.killed=True;self.returncode=-9;self.events.put(None)
@@ -106,14 +109,15 @@ class RecalculationProtocolTests(unittest.TestCase):
     def test_preexisting_process_is_never_acknowledged_or_terminated(self):
         worker=Worker(self.source,self.output,self.receipt)
         with self.assertRaisesRegex(ValueError,'préexistante'):self.run_worker(worker,previous={72})
-        self.assertFalse(worker.sent);self.assertTrue(worker.killed)
+        self.assertFalse(worker.sent);self.assertTrue(worker.input_closed)
+        self.assertFalse(worker.killed)
         self.assertFalse(self.owned.terminated);self.assertFalse(self.owned.closed)
         self.assertFalse(self.output.exists());self.assertEqual(digest(self.source),self.source_sha)
 
     def test_timeout_terminates_only_the_owned_handle(self):
         worker=Worker(self.source,self.output,self.receipt,stall=True)
         with self.assertRaisesRegex(ValueError,'délai'):self.run_worker(worker,timeout=1)
-        self.assertTrue(self.owned.terminated);self.assertTrue(self.owned.closed);self.assertTrue(worker.killed)
+        self.assertTrue(self.owned.terminated);self.assertTrue(self.owned.closed);self.assertTrue(worker.input_closed)
         self.assertFalse(self.output.exists());self.assertEqual(digest(self.source),self.source_sha)
 
     def test_worker_iteration_failure_cannot_save(self):

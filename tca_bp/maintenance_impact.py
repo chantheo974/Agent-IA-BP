@@ -4,6 +4,7 @@ La propagation interfeuille est volontairement conservatrice. Les références
 littérales sont localisées ; INDIRECT/OFFSET, VBA et objets exigent une recette.
 """
 from __future__ import annotations
+from .model_components import component_path, component_exists, read_component
 
 import hashlib
 import json
@@ -50,11 +51,11 @@ def impact_report(engine, changes):
                'source_schema_sha256': source['schema_sha256'],
                'source_kind': source['kind'], 'graph_derivation_verified': False}
     graph_path = folder / 'graphe_dependances.json'
-    if not graph_path.is_file():
+    if not component_exists(graph_path):
         return {'schema': 'tca-bp-maintenance-impact/1', 'status': 'GRAPHE_ABSENT',
                 **binding, 'graph_sha256': None,
                 'coverage_complete': False, 'limits': ['Impact non déterminé sans graphe de cette version.']}
-    payload = graph_path.read_bytes()
+    payload = read_component(graph_path)
     graph_sha = hashlib.sha256(payload).hexdigest()
     if source['files'].get('graphe_dependances.json', graph_sha) != graph_sha:
         raise ValueError("Le graphe a changé pendant l'analyse d'impact.")

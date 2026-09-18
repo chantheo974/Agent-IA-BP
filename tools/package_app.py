@@ -44,7 +44,7 @@ CORE_REQUIRED = frozenset({"tca_bp/" + name for name in (
     "model_engine.py", "model_runtime.py", "model_registry.py", "qualifications.py", "agents.py", "knowledge.py", "native_excel.py", "recalculate.ps1", "privacy.py",
     "wacc_solver.py", "wacc_native.py", "wacc_worker.ps1", "sensitivity_native.py", "sensitivity_worker.ps1",
     "calculation_operations.py", "calculation_proofs.py", "field_semantics.py",
-    "field_semantics_data.py", "_field_semantics_basis.py")})
+    "field_semantics_data.py", "_field_semantics_basis.py", "web_lock.py", "model_components.py", "native_cleanup.py", "initial_model.py")})
 CLIENT_CODE = CORE_REQUIRED | VENDOR_CODE | VENDOR_REQUIRED
 FORBIDDEN = frozenset({"exemple", ".git", ".venv", "runtime", "clients", "dossiers", "data", "secrets", "__pycache__"})
 MANIFEST = "PACKAGE_MANIFEST.json"
@@ -149,10 +149,10 @@ def _portable_document(raw: bytes, document: str, available: set[str]) -> bytes:
     return text.encode("utf-8")
 
 
-def _client_readme(raw: bytes) -> bytes:
+def _client_readme(raw: bytes, source_document=CLIENT_README) -> bytes:
     """Déplacer les liens du guide source docs/ vers le README racine du pack."""
     def relocate(match):
-        target = _local_target(CLIENT_README, match[2])
+        target = _local_target(source_document, match[2])
         if target is None or target == "__absolute_internal_resource__":
             return match[0]
         parsed = urlsplit(match[2].strip().strip("<>"))

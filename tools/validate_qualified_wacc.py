@@ -42,7 +42,10 @@ def run(folder: Path):
         raise ValueError('Préparation WACC qualifiée requise.')
     if prepared.get('case_id') != 'test_qualifications_wacc':
         raise ValueError('Identifiant de dossier fictif WACC inattendu.')
-    engine = ModelEngine(ROOT, model_dir=Path(prepared['model_dir']))
+    from tca_bp.web_model import ProfileEngine
+    model_dir = Path(prepared['model_dir'])
+    engine_class = ProfileEngine if (model_dir / 'web_profile.json').is_file() else ModelEngine
+    engine = engine_class(ROOT, model_dir=model_dir)
     build = engine.ensure_built()
     if build['template_sha256'] != prepared['model_sha256']:
         raise ValueError('Le modèle a changé depuis la préparation.')

@@ -167,6 +167,7 @@ class ServiceTests(unittest.TestCase):
 
     def test_failed_engine_keeps_current_version_and_reports_artifacts(self):
         plan = self.app.prepare_changes("cas_a", [self.update()])
+        original_apply=self.engine.apply
         def fail(*args): raise ValueError("Échec simulé avant publication")
         self.engine.apply = fail
         with self.assertRaisesRegex(ValueError, "simulé"):
@@ -174,6 +175,15 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(0, self.app.get_case("cas_a")["revision"])
         self.assertEqual("CONFORME", self.app.get_case("cas_a")["integrity"])
         self.assertEqual(1, len(self.app.recovery_status("cas_a")["transactions_to_inspect"]))
+        self.assertIn('nouvelle proposition',self.app.recovery_status('cas_a')['transactions_to_inspect'][0]['next_action'])
+        with self.assertRaisesRegex(ValueError,'nouvelle proposition'):
+            self.app.apply_plan('cas_a',plan['id'])
+        self.engine.apply=original_apply
+        replacement=self.app.prepare_changes('cas_a',[self.update()],'after_inspected_failure')
+        self.assertNotEqual(replacement['id'],plan['id'])
+        self.app.apply_plan('cas_a',replacement['id'])
+        self.assertEqual(self.app.get_case('cas_a')['revision'],1)
+        self.assertTrue((self.app.store.case_dir('cas_a')/'transactions'/plan['id']).exists())
 
 
     def test_template_changed_after_initialization_cannot_seed_new_case(self):

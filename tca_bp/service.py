@@ -11,13 +11,13 @@ import os
 from pathlib import Path
 import re
 import shutil
-import sqlite3
 import threading
 import zipfile
 from xml.etree import ElementTree as ET
 
 from .storage import Store, atomic_json, canonical, check_id, confined, digest, now, uid
 from .model_registry import ModelRegistry, model_pin
+from .web_lock import serialized_excel
 
 STATES = {"NON_RENSEIGNE", "HYPOTHESE", "CONFIRME", "INACTIF"}
 
@@ -32,14 +32,23 @@ class Application:
         self.data_dir = Path(data_dir).resolve()
         self.store = Store(self.data_dir)
         if engine is None:
-            from .model_engine import ModelEngine
-            engine = ModelEngine(self.project_root)
+            from .initial_model import initial_engine
+            engine = initial_engine(self.project_root)
         self.engine = engine
         self.registry = ModelRegistry(self.data_dir / "modeles", self.project_root)
         self._default_pin = None
         self._initialized = False
         self._init_lock = threading.RLock()
         self._coordinator = None
+        self._web_workspace = None
+
+    @property
+    def web_workspace(self):
+        """Same draft/migration service for HTTP and MCP; lazy optional import."""
+        if self._web_workspace is None:
+            from .web_workspace import WebWorkspace
+            self._web_workspace = WebWorkspace(self)
+        return self._web_workspace
 
     def initialize(self) -> dict:
         with self._init_lock:
@@ -56,6 +65,13 @@ class Application:
             from .agents import Coordinator
             self._coordinator = Coordinator(self.engine)
         return self._coordinator
+
+    @property
+    def decision_workspace(self):
+        if not getattr(self,'_decision_workspace',None):
+            from .decision_workspace import DecisionWorkspace
+            self._decision_workspace=DecisionWorkspace(self,self.web_workspace)
+        return self._decision_workspace
 
     def _row(self, case_id: str, db=None) -> dict:
         check_id(case_id)
@@ -84,7 +100,7 @@ class Application:
         if archive or not row.get("model_ref"):
             self.registry.verify(model_pin(row))
         with self.store.connection() as db:
-            events = db.execute("SELECT kind,details FROM history WHERE case_id=? AND kind IN ('CREATION','MODELE_RATTACHE_SUR_PREUVE') ORDER BY created_at", (row["id"],)).fetchall()
+            events = db.execute("SELECT kind,details FROM history WHERE case_id=? AND kind IN ('CREATION','MODELE_RATTACHE_SUR_PREUVE','MIGRATION_MODELE') ORDER BY rowid", (row["id"],)).fetchall()
         origins = [json.loads(event["details"]) for event in events if event["kind"] == "CREATION"]
         if len(origins) != 1:
             raise ValueError("Journal de création absent ou ambigu : identité du modèle non prouvée.")
@@ -94,7 +110,21 @@ class Application:
             if len(bindings) != 1:
                 raise ValueError("Le rattachement de ce dossier historique n'est pas prouvé.")
             origin = bindings[0]
-        if model_pin(origin) != model_pin(row):
+        expected = model_pin(origin)
+        for event in events:
+            if event['kind'] != 'MIGRATION_MODELE':
+                continue
+            migration = json.loads(event['details'])
+            if model_pin(migration.get('old_model', {})) != expected:
+                raise ValueError('Chaîne de migration du modèle interrompue.')
+            evidence = confined(self.store.case_dir(row['id']), migration['receipt_path'])
+            if not evidence.is_file() or digest(evidence) != migration['receipt_sha256']:
+                raise ValueError('Preuve de migration absente ou modifiée.')
+            receipt = json.loads(evidence.read_text(encoding='utf-8'))
+            if receipt.get('case_id') != row['id'] or receipt.get('old_model') != migration['old_model'] or receipt.get('new_model') != migration['new_model']:
+                raise ValueError('Identité de migration incohérente.')
+            expected = model_pin(migration['new_model'])
+        if expected != model_pin(row):
             raise ValueError("La version du dossier diverge du journal d'origine. Migration implicite refusée.")
 
     def engine_for_case(self, case_id: str):
@@ -326,8 +356,9 @@ class Application:
         except (OSError, ValueError, KeyError, TypeError):
             return missing
 
-    def declare_qualification(self, case_id: str, declaration: dict) -> dict:
-        """Enregistrer une décision humaine sourcée ; aucune donnée Excel n'est déduite."""
+    @staticmethod
+    def normalize_qualification(declaration: dict) -> dict:
+        """Validate an explicit declaration, without recording or qualifying it."""
         from datetime import date
         from .qualifications import MODULES
         if not isinstance(declaration, dict):
@@ -352,6 +383,11 @@ class Application:
                 raise ValueError("La fin de validité fiscale précède son début.")
         elif any(key in item for key in ("jurisdiction", "valid_from", "valid_to")):
             raise ValueError("Les dates et la juridiction appartiennent uniquement à REGLES_FISCALES.")
+        return item
+
+    def declare_qualification(self, case_id: str, declaration: dict) -> dict:
+        """Enregistrer une décision humaine sourcée ; aucune donnée Excel n'est déduite."""
+        item=self.normalize_qualification(declaration)
         with self.store.case_lock(case_id):
             row = self._row(case_id)
             self._workbook(row)
@@ -382,7 +418,8 @@ class Application:
             specific = self._specific_calculation_proofs(row)
             proof['wacc_proof'] = specific['wacc'] or {}
             proof['sensitivity_proof'] = specific['sensitivity'] or {}
-            result = evaluate(snapshot, basis["states"], basis["verified"],
+            evaluator = getattr(engine, 'evaluate_qualifications', evaluate)
+            result = evaluator(snapshot, basis["states"], basis["verified"],
                               module_declarations=basis["declarations"], calculation=proof)
         if digest(workbook) != row["sha256"] or self._qualification_basis(row)["fingerprint"] != basis["fingerprint"]:
             raise ValueError("Les valeurs ou les sources ont changé pendant la qualification.")
@@ -503,7 +540,9 @@ class Application:
         return (self._coordinator_for_case(case_id) if case_id else self.coordinator).agents()
 
     def sheet_info(self, sheet: str, case_id: str | None = None) -> dict:
-        return (self._coordinator_for_case(case_id) if case_id else self.coordinator).explain(sheet)
+        if case_id:
+            return self._coordinator_for_case(case_id).explain(sheet, workbook=self._workbook(self._row(case_id)))
+        return self.coordinator.explain(sheet)
 
     def route(self, case_id: str, text: str) -> dict:
         self._row(case_id)
@@ -540,7 +579,8 @@ class Application:
     def inspect(self, case_id: str, sheet: str, cells: list[str] | None = None) -> dict:
         from .qualifications import scope_for_output
         row = self._row(case_id)
-        result = self._engine_for_case(row).inspect(self._workbook(row), sheet, cells)
+        engine = self._engine_for_case(row)
+        result = engine.inspect(self._workbook(row), sheet, cells)
         result.update(model_pin(row))
         result["calculation_status"] = row["calculation_status"]
         result["financial_outputs_verified"] = False
@@ -549,7 +589,7 @@ class Application:
         if result.get("source_sha256") != case["sha256"]:
             raise ValueError("Le dossier a changé pendant la lecture des résultats.")
         for address, item in result.get("cells", {}).items():
-            scope = scope_for_output(sheet, address)
+            scope = getattr(engine,'scope_for_output',scope_for_output)(sheet, address)
             current = item.get("current", {})
             is_output = item.get("writable") is False and (current.get("formula") is not None or isinstance(current.get("value"), (int, float)))
             sensitivity_pending = sheet in ("Sensi TCA", "Sensi Analyses", "Sensi Graphiques") and not case['sensitivity_verified']
@@ -791,7 +831,7 @@ class Application:
             folder = self.store.case_dir(case_id)
             tx = folder / "transactions" / plan_id
             if tx.exists():
-                raise ValueError("Des artefacts de cette transaction existent. Consulter le diagnostic de reprise avant de réessayer.")
+                raise ValueError("Des artefacts de cette transaction existent. Consulter le diagnostic de reprise et l’historique. Si cette transaction n’a pas été adoptée, préparer une nouvelle proposition depuis la révision courante avec un nouvel identifiant de demande, puis examiner son aperçu. Les anciennes preuves restent conservées.")
             tx.mkdir()
             atomic_json(tx / "transaction.json", {**model_pin(row), "status": "EN_COURS", "case_id": case_id, "plan_id": plan_id, "source_sha256": row["sha256"], "started_at": now()})
             output = tx / "saisie.xlsm"
@@ -833,6 +873,7 @@ class Application:
             self._save_state(case_id)
             return receipt
 
+    @serialized_excel
     def recalculate(self, case_id: str, include_tables: bool = False) -> dict:
         from .native_excel import recalculate
         if not isinstance(include_tables, bool):
@@ -893,10 +934,12 @@ class Application:
                     "qualified_availability": assessment["scopes"], "qualification_status": assessment["status"],
                     "qualification_questions": assessment.get("questions", [])}
 
+    @serialized_excel
     def solve_wacc(self, case_id: str, timeout=600) -> dict:
         from .calculation_operations import execute
         return execute(self, case_id, 'wacc', timeout)
 
+    @serialized_excel
     def verify_sensitivity(self, case_id: str, timeout=3600) -> dict:
         from .calculation_operations import execute
         return execute(self, case_id, 'sensitivity', timeout)
@@ -996,9 +1039,11 @@ class Application:
                     item["raw_status"] = item.get("status")
                     item["status"] = item["recovery_status"]
                 else:
-                    item.update(needs_reapply=False, recovery_status="A_INSPECTER_AVANT_NOUVELLE_DEMANDE")
+                    item.update(needs_reapply=False, recovery_status="A_INSPECTER_AVANT_NOUVELLE_DEMANDE",
+                                next_action="Vérifier la révision et l’historique. Si le lot n’a pas été adopté, préparer une nouvelle proposition avec un nouvel identifiant de demande, puis examiner son aperçu. Conserver cette transaction comme preuve ; ne pas la réexécuter automatiquement.")
                 transactions.append(item)
-        return {"case_id": case_id, **model_pin(row), "model_status": self.get_case(case_id)["model_status"], "integrity": self.get_case(case_id)["integrity"], "current_revision": row["revision"],
+        described = self.get_case(case_id)
+        return {"case_id": case_id, **model_pin(row), "model_status": described["model_status"], "integrity": described["integrity"], "current_revision": row["revision"],
                 "lock": read_artifact(lock) if lock.exists() else None, "lock_process_status": "NON_VERIFIE",
                 "transactions_to_inspect": transactions,
                 "notice": "La version courante est désignée par l'état du dossier. Aucun fichier n'est adopté d'après sa date."}

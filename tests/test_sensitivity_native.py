@@ -39,6 +39,17 @@ def mathematical_campaign():
 
 
 class SensitivityComparisonTests(unittest.TestCase):
+    def test_preparation_consumes_native_deadline_before_any_process_is_started(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            with patch.object(native,'available',return_value=True),patch.object(native.time,'monotonic',side_effect=[0,2]),patch.object(native,'prepare_campaign') as prepare,patch.object(native,'_verify_plan') as verify,patch.object(native.subprocess,'Popen') as launch:
+                with self.assertRaises(TimeoutError):
+                    native.verify_native(None,root/'source.xlsm',root/'output.xlsm',root/'receipt.json',timeout=1)
+                prepare.assert_called_once()
+                self.assertEqual(prepare.call_args.kwargs['deadline'],1)
+                verify.assert_not_called()
+                launch.assert_not_called()
+
     def test_exact_closed_scope_and_axes_orientation(self):
         specs = native.scenarios()
         self.assertEqual(len(specs), 24)
@@ -147,7 +158,13 @@ class InterruptedProtocolTests(unittest.TestCase):
                     {'event': 'owned_process', 'pid': 71},
                     {'event': 'progress', 'stage': 'scalar_complete', 'completed': 2},
                     {'event': 'error', 'error': 'Interruption simulée après deux scénarios'}])
-                worker.stderr = iter(()); worker.stdin = io.StringIO(); worker.returncode = None
+                class CapturedInput(io.StringIO):
+                    def close(self):
+                        self.saved=self.getvalue()
+                        super().close()
+                    def getvalue(self):
+                        return self.saved if self.closed else super().getvalue()
+                worker.stderr = iter(()); worker.stdin = CapturedInput(); worker.returncode = None
                 worker.poll = lambda: worker.returncode
                 worker.kill = lambda: setattr(worker, 'returncode', 2)
                 worker.wait = lambda timeout: 2

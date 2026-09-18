@@ -22,6 +22,11 @@ def validate(proof, kind, folder, pin, *, depth=0):
                 or proof['input_signature'] != inherited['input_signature']
                 or proof['input_signature'] != preservation['input_signature']):
             return None
+        if original.get('profile_sha256') or preserved.get('profile_sha256'):
+            if (not original.get('profile_sha256') or original['profile_sha256']!=preserved.get('profile_sha256')
+                    or proof.get('profile_sha256')!=original['profile_sha256']
+                    or proof.get('native_mapping_sha256')!=original.get('native_mapping_sha256')):
+                return None
         return original
     try:
         path = confined(folder, proof['receipt_path'])
@@ -40,4 +45,8 @@ def validate(proof, kind, folder, pin, *, depth=0):
             or receipt.get('input_signature_before') != proof['input_signature']
             or receipt.get('input_signature_after') != proof['input_signature']):
         return None
+    if any(key in proof or key in receipt for key in ('profile_sha256','native_mapping_sha256')):
+        if any(not isinstance(proof.get(key),str) or len(proof[key])!=64 or receipt.get(key)!=proof[key]
+               for key in ('profile_sha256','native_mapping_sha256')):
+            return None
     return receipt

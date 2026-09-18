@@ -5,6 +5,7 @@ jamais reconstruite ni remplacée implicitement à partir du modèle courant.
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
@@ -15,11 +16,12 @@ import tempfile
 import time
 
 from .storage import canonical, digest
+from .model_components import component_exists, component_path, read_component, MAX_COMPONENT_BYTES
 
 TEMPLATE = "TCA_BP_Trame_generique.xlsm"
 REQUIRED = frozenset({TEMPLATE, "modele.json", "build_receipt.json"})
 OPTIONAL = frozenset({"catalogue_champs.json", "classification_cellules.json",
-                      "graphe_dependances.json", "migrations.json"})
+                      "graphe_dependances.json", "migrations.json", "web_profile.json"})
 PIN_KEYS = ("model_id", "model_ref", "template_sha256", "schema_sha256")
 
 
@@ -49,6 +51,7 @@ class ModelRegistry:
         self.project_root = Path(project_root).resolve()
         self._engines = {}
         self._loaded_schema_hashes = {}
+        self._compression = {}
 
     def describe(self, engine) -> dict:
         """Relire les sources, même si le moteur a déjà mémorisé son manifeste."""
@@ -59,10 +62,10 @@ class ModelRegistry:
             raise ValueError("La trame générique a changé depuis son chargement. Version refusée.")
         if isinstance(engine, ModelEngine):
             source = engine.model_dir
-            names = REQUIRED | {name for name in OPTIONAL if (source / name).exists()}
-            files = {name: digest(_plain(source / name, source)) for name in sorted(names)}
+            names = REQUIRED | {name for name in OPTIONAL if component_exists(source / name)}
+            files = {name: _sha(read_component(_plain(source / name, source))) for name in sorted(names)}
             actual = json.loads((source / "build_receipt.json").read_text(encoding="utf-8"))
-            schema = json.loads((source / "modele.json").read_text(encoding="utf-8"))
+            schema = json.loads(read_component(source / "modele.json"))
             if (actual.get("template_sha256") != template_sha or actual.get("schema_sha256") != files["modele.json"]
                     or receipt.get("schema_sha256") != files["modele.json"]
                     or actual.get("model_id") != engine.model_id or schema.get("model_id") != engine.model_id
@@ -78,6 +81,34 @@ class ModelRegistry:
             kind = "ADAPTATEUR_INJECTE"
         seal = {"schema": "tca-bp-model-archive/1", "kind": kind, "model_id": engine.model_id,
                 "template_sha256": template_sha, "schema_sha256": schema_sha, "files": files}
+        if kind == 'MODELE':
+            # An already archived legacy engine keeps its exact original pin.
+            existing = source / 'seal.json'
+            if existing.is_file():
+                previous = json.loads(existing.read_text(encoding='utf-8'))
+                if previous.get('schema') == 'tca-bp-model-archive/1':
+                    return {**seal, "model_ref": _sha(canonical(seal).encode())}
+            storage = {}
+            for name, sha in files.items():
+                physical = component_path(source / name)
+                if physical.name != name:
+                    stored = json.loads(existing.read_text(encoding='utf-8'))['storage'][name]
+                    storage[name] = stored
+                elif name.endswith('.json') and physical.stat().st_size >= 1024 * 1024:
+                    key = (sha, physical.stat().st_size)
+                    if key not in self._compression:
+                        class Fingerprint:
+                            def __init__(self): self.hash=hashlib.sha256()
+                            def write(self, chunk): self.hash.update(chunk); return len(chunk)
+                            def flush(self): pass
+                        sink=Fingerprint()
+                        with physical.open('rb') as src, gzip.GzipFile(filename='',mode='wb',fileobj=sink,mtime=0,compresslevel=6) as dst:
+                            shutil.copyfileobj(src,dst)
+                        self._compression[key] = sink.hash.hexdigest()
+                    storage[name] = {'path':name+'.gz','codec':'gzip','size':key[1], 'stored_sha256':self._compression[key]}
+                else:
+                    storage[name] = {'path':name,'codec':'identity','size':physical.stat().st_size,'stored_sha256':sha}
+            seal.update(schema='tca-bp-model-archive/2',storage=storage)
         return {**seal, "model_ref": _sha(canonical(seal).encode())}
 
     def register(self, engine) -> dict:
@@ -91,12 +122,19 @@ class ModelRegistry:
             try:
                 if seal["kind"] == "MODELE":
                     for name in seal["files"]:
-                        shutil.copyfile(_plain(engine.model_dir / name, engine.model_dir), scratch / name)
+                        src = _plain(component_path(engine.model_dir / name), engine.model_dir)
+                        item = seal.get('storage',{}).get(name,{'path':name,'codec':'identity'})
+                        if item['codec']=='gzip' and src.name==name:
+                            with src.open('rb') as source, (scratch/item['path']).open('wb') as packed, gzip.GzipFile(filename='',mode='wb',fileobj=packed,mtime=0,compresslevel=6) as dest:
+                                shutil.copyfileobj(source,dest)
+                        else:
+                            shutil.copyfile(src, scratch/item['path'])
                 else:
                     shutil.copyfile(engine.template_path, scratch / TEMPLATE)
                     raw = canonical({"model_id": engine.model_id, "schema": engine.schema, "fields": engine.catalog()}).encode()
                     (scratch / "adapter_schema.json").write_bytes(raw)
-                if seal != self.describe(engine) or any(digest(scratch / name) != sha for name, sha in seal["files"].items()):
+                (scratch / "seal.json").write_text(canonical(seal), encoding="utf-8")
+                if seal != self.describe(engine) or any(_sha(read_component(scratch / name)) != sha for name, sha in seal["files"].items()):
                     raise ValueError("La source du modèle a changé pendant son archivage.")
                 (scratch / "seal.json").write_text(canonical(seal), encoding="utf-8")
                 for attempt in range(8):
@@ -135,11 +173,31 @@ class ModelRegistry:
             required = REQUIRED if seal["kind"] == "MODELE" else allowed
             if not required <= set(seal["files"]) <= allowed:
                 raise ValueError("Liste des composants du modèle archivé invalide.")
-            if {path.name for path in directory.iterdir()} != set(seal["files"]) | {"seal.json"}:
+            version=seal.get('schema')
+            if version not in ('tca-bp-model-archive/1','tca-bp-model-archive/2'):
+                raise ValueError('Format d’archive de modèle inconnu.')
+            storage=seal.get('storage',{}) if version.endswith('/2') else {
+                name:{'path':name,'codec':'identity','stored_sha256':sha} for name,sha in seal['files'].items()}
+            if set(storage)!=set(seal['files']):
+                raise ValueError('Index de stockage incomplet.')
+            physical_names=set()
+            for name,item in storage.items():
+                codec=item.get('codec')
+                expected=name+'.gz' if codec=='gzip' else name
+                if codec not in ('gzip','identity') or item.get('path')!=expected or (codec=='gzip' and not name.endswith('.json')):
+                    raise ValueError('Composant archivé invalide.')
+                physical_names.add(expected)
+                path=_plain(directory/expected,self.root)
+                # Every public verification reads every byte. File metadata is
+                # never evidence of integrity, including restored timestamps.
+                if digest(path)!=item.get('stored_sha256'):
+                    raise ValueError('Le modèle archivé a été modifié. Restaurer cette version exacte.')
+                if codec=='identity' and item['stored_sha256']!=seal['files'][name]:
+                    raise ValueError('Empreinte logique du composant incohérente.')
+                if version.endswith('/2') and (type(item.get('size')) is not int or not 0<=item['size']<=MAX_COMPONENT_BYTES):
+                    raise ValueError('Taille de composant hors limite.')
+            if {path.name for path in directory.iterdir()} != physical_names | {'seal.json'}:
                 raise ValueError("Un composant non scellé a été ajouté à l'archive du modèle.")
-            for name, sha in seal["files"].items():
-                if digest(_plain(directory / name, self.root)) != sha:
-                    raise ValueError("Le modèle archivé a été modifié. Restaurer cette version exacte ; aucune migration automatique n'est effectuée.")
             return seal
         except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
             raise ValueError("Version exacte du modèle absente ou incomplète. Restaurer son archive ; le modèle courant ne sera pas substitué.") from exc
@@ -154,7 +212,13 @@ class ModelRegistry:
             self._engines[ref] = engine
         elif ref not in self._engines:
             from .model_engine import ModelEngine
-            self._engines[ref] = ModelEngine(self.project_root, self.root / ref)
+            schema = json.loads(read_component(self.root / ref / 'modele.json'))
+            if schema.get('runtime_profile') == 'web-profile/1':
+                from .web_model import ProfileEngine
+                engine_type = ProfileEngine
+            else:
+                engine_type = ModelEngine
+            self._engines[ref] = engine_type(self.project_root, self.root / ref)
             self._loaded_schema_hashes[ref] = _sha(canonical(self._engines[ref].schema).encode())
         engine = self._engines[ref]
         engine.ensure_built()

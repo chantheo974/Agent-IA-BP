@@ -36,6 +36,26 @@ class QualificationGuardTests(unittest.TestCase):
         raw = b'<workbookProtection workbookPassword="test" revisionsPassword="test" lockStructure="1"/>'
         self.assertEqual(ET.fromstring(remove_inherited_protection_credentials(raw)).attrib, {'lockStructure': '1'})
 
+    def test_range_credentials_acl_and_file_reservation_are_removed(self):
+        raw=(b'<workbook xmlns:x="urn:fixture"><x:fileSharing readOnlyRecommended="1" '
+             b'userName="Fictitious Person" reservationPassword="ABCD" algorithmName="SHA-512" '
+             b'hashValue="fakehash" saltValue="fakesalt" spinCount="100000"/>'
+             b'<protectedRanges><protectedRange name="Editable" sqref="A1:B8" '
+             b'password="ABCD" securityDescriptor="fictional-acl" algorithmName="SHA-512" '
+             b'hashValue="fakehash" saltValue="fakesalt" spinCount="100000"/></protectedRanges>'
+             b'<definedName name="userName">"ordinary text"</definedName></workbook>')
+        changed=remove_inherited_protection_credentials(raw);root=ET.fromstring(changed)
+        self.assertEqual(root.find('{urn:fixture}fileSharing').attrib,{'readOnlyRecommended':'1'})
+        self.assertEqual(root.find('protectedRanges/protectedRange').attrib,{'name':'Editable','sqref':'A1:B8'})
+        self.assertEqual(root.find('definedName').attrib,{'name':'userName'})
+        self.assertNotIn(b'Fictitious Person',changed)
+        self.assertNotIn(b'fictional-acl',changed)
+
+    def test_single_quoted_prefixed_credentials_are_removed_without_ranges_loss(self):
+        raw=b"<x:protectedRange xmlns:x='urn:fixture' name='Range' sqref='C3:C9' password = 'ABCD' x:hashValue='hashed'/>"
+        changed=remove_inherited_protection_credentials(raw)
+        self.assertEqual(ET.fromstring(changed).attrib,{'name':'Range','sqref':'C3:C9'})
+
 
 if __name__ == '__main__':
     unittest.main()

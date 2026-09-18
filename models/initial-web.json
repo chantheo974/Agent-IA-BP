@@ -1,0 +1,7 @@
+{
+  "schema": "tca-bp-initial-model/1",
+  "model_id": "tca-bp-web/eda1142bede89210fc7f9f5d",
+  "model_ref": "600b94dba37046704742b1cce802a9aeefbe3ab1cb897063bbe4bdaf73dfdacc",
+  "template_sha256": "a34426619c1515a470e92db4fcf10f70bb1a173c0b35e04349ab69bdddae6cb9",
+  "schema_sha256": "2c9f8ad3317f66c8981865e9f6493d78970389ce8c7de6dd2fe483c169c128f3"
+}

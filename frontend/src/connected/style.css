@@ -1,0 +1,41 @@
+.connected-cockpit { font-size: 16px; line-height: 1.55; }
+.connected-cockpit .legacy-ui {
+  font-family: var(--font-sans); font-size: 16px; color: #28324e;
+  background: transparent; --green: var(--brand); --deep: var(--brand-deep);
+  --muted: #667085; --line: rgba(40,52,86,.12); --cream: #f7f8fc;
+}
+.connected-cockpit .legacy-ui :is(input, select, textarea, button, .button) { font-size: 16px; }
+.connected-cockpit .legacy-ui :is(button, input:not([type=checkbox]), select, .button) { min-height: 44px; }
+.connected-cockpit .legacy-ui .button { border-radius: 999px; white-space: normal; padding: 10px 17px; }
+.connected-cockpit .legacy-ui :is(p, label, .details-block, .record-questions) { font-size: 16px; line-height: 1.65; }
+.connected-cockpit .legacy-ui :is(small, .help-text, .badge, th, td) { font-size: 14px; }
+.connected-cockpit .legacy-ui :is(h2, h3) { color: #182038; }
+.connected-cockpit .legacy-ui h3 { font-size: 18px; }
+.connected-cockpit .legacy-ui :is(.workshop-card, .source-card) {
+  background: var(--surface-solid); border: 1px solid var(--edge-light);
+  border-radius: 24px; box-shadow: var(--shadow-near); padding: 24px;
+}
+.connected-cockpit .legacy-ui .workshop-page { padding: 0; overflow: visible; gap: 24px; }
+.connected-cockpit .legacy-ui .workshop-card :is(input, select, textarea) { width: 100%; }
+.connected-cockpit .legacy-ui .workshop-card input[type=checkbox] { width: 18px; height: 18px; }
+.connected-cockpit .legacy-ui .form-grid { gap: 16px; }
+.connected-cockpit .legacy-ui .modal { margin: auto; border-radius: 26px; width: min(820px, calc(100vw - 28px)); }
+.connected-cockpit .legacy-ui .modal-backdrop { z-index: 80; }
+.connected-cockpit .legacy-ui .button.primary:hover:not(:disabled) { background: var(--brand-deep); }
+.connected-cockpit .legacy-ui :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.connected-grid { display: flex; min-width: 0; height: min(78vh, 850px); flex-direction: column; overflow: hidden; border-radius: 18px; }
+.connected-cockpit .connected-grid .grid-shell { min-height: 280px; }
+.connected-cockpit .connected-grid .formula-bar { flex-wrap: wrap; }
+.connected-cockpit .connected-grid .formula-bar input { min-width: 0; }
+.connected-cockpit .connected-grid .grid-permission-note { padding: 8px 12px; background: #f5f6fc; color: #596481; font-size: 14px; }
+.connected-cockpit .connected-draft-bar { margin-top: 24px; }
+.connected-cockpit .connected-draft-bar .draft-bar { position: static; flex-wrap: wrap; height: auto; border-radius: 20px; padding: 18px; background: var(--surface-tinted); }
+.connected-chat { min-height: 0; height: min(70vh, 720px); display: flex; flex-direction: column; }
+.connected-cockpit .connected-chat :is(.chat-composer, .chat-context, .chat-message, .agent-row) { font-size: 16px; }
+.connected-cockpit .connected-chat .messages { min-height: 0; }
+@media (max-width: 767px) {
+  .connected-cockpit .legacy-ui :is(.workshop-card, .source-card) { padding: 18px; }
+  .connected-cockpit .legacy-ui :is(.workshop-grid, .form-grid, .holder-row) { grid-template-columns: minmax(0,1fr); }
+  .connected-cockpit .legacy-ui .button-group { flex-wrap: wrap; }
+  .connected-cockpit .legacy-ui .modal-backdrop { padding: 8px; }
+}

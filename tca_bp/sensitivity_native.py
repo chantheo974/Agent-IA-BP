@@ -20,7 +20,7 @@ import uuid
 
 from .native_excel import available
 from .storage import atomic_json, canonical, digest
-from .wacc_native import OwnedExcelProcess, existing_excel_pids
+from .wacc_native import OwnedExcelProcess, existing_excel_pids, native_mapping
 
 SHEET = 'Sensi Analyses'
 DRIVERS = ('C8', 'C14', 'C18')
@@ -61,17 +61,22 @@ def scenarios():
     return result
 
 
-def _preconditions(wb):
-    value = lambda cell: wb.value(SHEET, cell)
+def _preconditions(wb, mapping=None):
+    sheet = mapping['sheet'] if mapping else SHEET
+    address = lambda cell: mapping['cells'][cell] if mapping else cell
+    value = lambda cell: wb.value(sheet, address(cell))
+    def auxiliary(name,cell):
+        location=mapping['auxiliary'][name+'!'+cell] if mapping else {'sheet':name,'cell':cell}
+        return wb.value(location['sheet'],location['cell'])
     for cell in DRIVERS:
-        if wb.formula(SHEET, cell) is not None or not _finite(value(cell)) or value(cell) != 0:
+        if wb.formula(sheet, address(cell)) is not None or not _finite(value(cell)) or value(cell) != 0:
             raise ValueError('Pilote technique de base non neutre : ' + cell)
     expected_axes = {**{f'C{24+i}': i for i in range(1, 10)},
                      **dict(zip((f'B{r}' for r in range(40, 46)), (-.3, -.2, -.1, 0, .1, .2))),
                      **dict(zip(('D49', 'E49', 'F49'), (0, -.5, -1))),
                      **dict(zip(('C50', 'C51', 'C52'), (0, -.1, -.2)))}
     for cell, expected in expected_axes.items():
-        if wb.formula(SHEET, cell) is not None or not _finite(value(cell)) or value(cell) != expected:
+        if wb.formula(sheet, address(cell)) is not None or not _finite(value(cell)) or value(cell) != expected:
             raise ValueError('Axe de table incompatible : ' + cell)
     shocks = {f'F{row}': value(f'F{row}') for row in range(8, 17)}
     if any(not _finite(v) or v == 0 for v in shocks.values()):
@@ -81,20 +86,23 @@ def _preconditions(wb):
         'C40': {'t': 'dataTable', 'ref': 'C40:D45', 'r1': 'C8'},
         'D50': {'t': 'dataTable', 'ref': 'D50:F52', 'r1': 'C14', 'r2': 'C8', 'dt2D': '1', 'dtr': '1'},
     }.items():
-        node = wb.sheet(SHEET)[1][anchor].find('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}f')
+        if mapping:
+            attributes={key:mapping['ranges'][val] if key=='ref' else address(val) if key in ('r1','r2') else val for key,val in attributes.items()}
+        node = wb.sheet(sheet)[1][address(anchor)].find('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}f')
         if node is None or any(node.get(k) != v for k, v in attributes.items()):
             raise ValueError('Définition native de table incompatible : ' + anchor)
     return {'drivers': {c: value(c) for c in DRIVERS}, 'axes': expected_axes, 'shocks': shocks,
-            'scenario': wb.value('Sensi TCA', 'C15'), 'horizon': wb.value('Control', 'C59'),
-            'wacc_outputs': {cell: wb.value('Valorisation', cell) for cell in ('D136','D141','D142','D143','D156')}}
+            'scenario': auxiliary('Sensi TCA', 'C15'), 'horizon': auxiliary('Control', 'C59'),
+            'wacc_outputs': {cell: auxiliary('Valorisation', cell) for cell in ('D136','D141','D142','D143','D156')}}
 
 
-def _patch_literals(raw, drivers):
+def _patch_literals(raw, drivers, mapping=None):
     """Remplace seulement trois contenus v ; les octets XML voisins restent exacts."""
     if set(drivers) != set(DRIVERS) or any(not _finite(v) for v in drivers.values()):
         raise ValueError('Périmètre instrumental limité aux trois pilotes techniques.')
     for address in DRIVERS:
-        pattern = rb'(<(?:\w+:)?c\b[^>]*\br="' + address.encode() + rb'"[^>]*>)(.*?)(</(?:\w+:)?c>)'
+        physical=mapping['cells'][address] if mapping else address
+        pattern = rb'(<(?:\w+:)?c\b[^>]*\br="' + physical.encode() + rb'"[^>]*>)(.*?)(</(?:\w+:)?c>)'
         hits = list(re.finditer(pattern, raw, re.DOTALL))
         if len(hits) != 1:
             raise ValueError('Cellule instrumentale absente ou dupliquée : ' + address)
@@ -118,16 +126,24 @@ def _zip_hashes(path):
         return {n: hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist()}
 
 
-def prepare_campaign(engine, source: Path, directory: Path):
+def _check_deadline(deadline):
+    if deadline is not None and time.monotonic()>=deadline:
+        raise TimeoutError('Délai global de la campagne dépassé ; copies et preuves conservées, aucune adoption.')
+
+
+def prepare_campaign(engine, source: Path, directory: Path, *, deadline=None):
     """Prépare des instruments neufs ; ne lance aucune application native."""
     source, directory = Path(source).resolve(), Path(directory).resolve()
     if directory.exists():
         raise ValueError('La préparation exige un répertoire neuf.')
+    _check_deadline(deadline)
     before = engine.context(source)
+    _check_deadline(deadline)
+    mapping=native_mapping(getattr(engine,'profile',None),'sensitivity')
     wb = engine._open(source)
     try:
-        initial = _preconditions(wb)
-        part = wb.sheets[SHEET]['part']
+        initial = _preconditions(wb,mapping)
+        part = wb.sheets[mapping['sheet'] if mapping else SHEET]['part']
     finally:
         wb.close()
     definitions = scenarios()
@@ -142,10 +158,11 @@ def prepare_campaign(engine, source: Path, directory: Path):
         payloads = {n: original.read(n) for n in names}
         original_hashes = {n: hashlib.sha256(data).hexdigest() for n, data in payloads.items()}
         for item in definitions:
+            _check_deadline(deadline)
             destination = directory / (item['id'] + '.xlsm')
-            patched = _patch_literals(payloads[part], item['drivers'])
+            patched = _patch_literals(payloads[part], item['drivers'],mapping)
             # Réversibilité octet pour octet, y compris formules/protections/styles.
-            if _patch_literals(patched, initial['drivers']) != payloads[part]:
+            if _patch_literals(patched, initial['drivers'],mapping) != payloads[part]:
                 raise ValueError('Le delta instrumental déborde les trois littéraux autorisés.')
             with zipfile.ZipFile(destination, 'x', compression=zipfile.ZIP_DEFLATED) as target:
                 for info in original.infolist():
@@ -155,6 +172,7 @@ def prepare_campaign(engine, source: Path, directory: Path):
             if set(actual) != set(original_hashes) or set(changed) - {part}:
                 raise ValueError('Partie non autorisée modifiée dans une copie instrumentale.')
             item.update(path=str(destination), sha256=digest(destination), changed_parts=changed)
+    _check_deadline(deadline)
     if digest(source) != source_sha:
         raise ValueError('Source modifiée pendant la préparation.')
     plan = {'schema': 'tca-sensitivity-plan/1', 'algorithm': ALGORITHM,
@@ -164,17 +182,22 @@ def prepare_campaign(engine, source: Path, directory: Path):
             'scope': {'tables': 3, 'scalars': 24, 'comparisons': 57, 'technical_cells': list(DRIVERS)},
             'isolation': 'COPIES_DISTINCTES_NON_ADOPTABLES', 'native_executed': False,
             'prepared_at_utc': dt.datetime.now(dt.timezone.utc).isoformat()}
+    if mapping:
+        plan['native_mapping']=mapping
     atomic_json(directory / 'plan.json', plan)
     return plan
 
 
-def _verify_plan(engine, source, directory):
+def _verify_plan(engine, source, directory, *, deadline=None):
+    _check_deadline(deadline)
     directory = Path(directory).resolve()
     plan = json.loads((directory / 'plan.json').read_text(encoding='utf-8-sig'))
+    mapping=native_mapping(getattr(engine,'profile',None),'sensitivity')
     if (plan.get('schema') != 'tca-sensitivity-plan/1' or plan.get('algorithm') != ALGORITHM
             or plan.get('source') != str(source) or plan.get('source_sha256') != digest(source)
             or plan.get('model_id') != engine.model_id
-            or plan.get('template_sha256') != engine.ensure_built()['template_sha256']):
+            or plan.get('template_sha256') != engine.ensure_built()['template_sha256']
+            or plan.get('native_mapping') != mapping):
         raise ValueError('Préparation de sensibilité périmée ou incompatible.')
     expected = scenarios()
     if len(plan.get('scenarios', [])) != len(expected):
@@ -183,14 +206,15 @@ def _verify_plan(engine, source, directory):
     with zipfile.ZipFile(source) as z:
         wb = engine._open(source)
         try:
-            initial = _preconditions(wb)
-            part = wb.sheets[SHEET]['part']
+            initial = _preconditions(wb,mapping)
+            part = wb.sheets[mapping['sheet'] if mapping else SHEET]['part']
             if initial != plan.get('initial') or wb.input_signature(engine.schema) != plan.get('input_signature'):
                 raise ValueError('Entrées ou scénario modifiés depuis la préparation.')
         finally:
             wb.close()
         original_xml = z.read(part)
     for actual, wanted in zip(plan['scenarios'], expected):
+        _check_deadline(deadline)
         path = directory / (wanted['id'] + '.xlsm')
         if (any(actual.get(k) != v for k, v in wanted.items()) or actual.get('path') != str(path)
                 or actual.get('sha256') != digest(path)):
@@ -199,8 +223,9 @@ def _verify_plan(engine, source, directory):
         if set(hashes) != set(source_hashes) or any(hashes[n] != h for n, h in source_hashes.items() if n != part):
             raise ValueError('Une copie scalaire a changé hors des pilotes autorisés.')
         with zipfile.ZipFile(path) as z:
-            if z.read(part) != _patch_literals(original_xml, wanted['drivers']):
+            if z.read(part) != _patch_literals(original_xml, wanted['drivers'],mapping):
                 raise ValueError('Une copie scalaire a changé hors des trois littéraux autorisés.')
+    _check_deadline(deadline)
     return plan
 
 
@@ -321,6 +346,8 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
         raise ValueError('Délai de sensibilité requis entre 1 et 3 600 secondes.')
     if not isinstance(resume, bool):
         raise ValueError('La reprise doit être explicitement booléenne.')
+    started=time.monotonic()
+    deadline=started+timeout
     source, output, receipt = (Path(p).resolve() for p in (source, output, receipt))
     if len({source, output, receipt}) != 3 or output.exists() != resume or receipt.exists() or output.suffix.lower() != '.xlsm':
         raise ValueError('Source, nouvelle copie XLSM et nouveau reçu doivent être distincts.')
@@ -328,12 +355,16 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
         raise ValueError('Excel est requis pour vérifier les tables natives.')
     prepared = Path(prepared).resolve() if prepared else receipt.parent / (receipt.stem + '_instruments')
     if not prepared.exists():
-        prepare_campaign(engine, source, prepared)
-    plan = _verify_plan(engine, source, prepared)
+        prepare_campaign(engine, source, prepared,deadline=deadline)
+    _check_deadline(deadline)
+    plan = _verify_plan(engine, source, prepared,deadline=deadline)
+    mapping=plan.get('native_mapping')
     plan_sha = digest(prepared / 'plan.json')
     binding = {'source_sha256': plan['source_sha256'], 'plan_sha256': plan_sha,
                'implementation_sha256': _implementation_sha(), 'output_path': str(output),
                'model_id': plan['model_id'], 'template_sha256': plan['template_sha256']}
+    if mapping:
+        binding.update(profile_sha256=mapping['profile_sha256'],native_mapping_sha256=mapping['mapping_sha256'])
     checkpoint_dir = receipt.with_name(receipt.stem+'_checkpoints')
     if resume:
         resumed, ledger = _load_checkpoints(checkpoint_dir, binding, plan, output)
@@ -360,6 +391,7 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
             '-File', str(Path(__file__).with_name('sensitivity_worker.ps1')), '-PlanPath', str(prepared / 'plan.json'),
             '-PlanSha256', plan_sha, '-OutputPath', str(output), '-ReceiptPath', str(native_path),
             '-ResumePath', str(resume_request), '-ResumeSha256', digest(resume_request)]
+    _check_deadline(deadline)
     previous = existing_excel_pids()
     process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, encoding='utf-8', env=environment,
@@ -379,7 +411,7 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
             pass
     threading.Thread(target=reader, daemon=True).start()
     threading.Thread(target=drain, daemon=True).start()
-    started, owned, complete = time.monotonic(), None, False
+    owned, complete = None, False
     try:
         while True:
             remaining = timeout - (time.monotonic() - started)
@@ -412,6 +444,8 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
         if process.returncode != 0 or not output.is_file() or not native_path.is_file():
             raise ValueError('Campagne native non terminée.')
         native = json.loads(native_path.read_text(encoding='utf-8-sig'))
+        if mapping and (native.get('profile_sha256')!=mapping['profile_sha256'] or native.get('native_mapping_sha256')!=mapping['mapping_sha256']):
+            raise ValueError('Le reçu des sensibilités appartient à une autre cartographie métier.')
         completed, completed_ledger = _load_checkpoints(checkpoint_dir, binding, plan, output)
         if (len(completed_ledger['records']) != 25 or native.get('scalars') != completed['scalars']
                 or native.get('tables') != completed['base'].get('tables')):
@@ -420,7 +454,7 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
                 or native.get('output_sha256') != digest(output)):
             raise ValueError('Empreintes natives incompatibles avec les fichiers.')
         # La source et chacun des instruments doivent rester strictement identiques.
-        _verify_plan(engine, source, prepared)
+        _verify_plan(engine, source, prepared,deadline=deadline)
         if digest(prepared / 'plan.json') != plan_sha:
             raise ValueError('Le plan de la campagne a changé pendant le calcul.')
         after = engine.context(output)
@@ -428,15 +462,18 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
             raise ValueError('Les entrées métier ont changé pendant la vérification.')
         wb = engine._open(output)
         try:
-            if _preconditions(wb) != plan['initial']:
+            if _preconditions(wb,mapping) != plan['initial']:
                 raise ValueError('Les pilotes, chocs, axes, scénario ou horizon ont changé.')
-            disk_tables = {cell: wb.value(SHEET, cell) for s in scenarios() for cell in s['targets']}
-            disk_base = {cell: wb.value(SHEET, cell) for cell in BASE_REFS}
+            sheet=mapping['sheet'] if mapping else SHEET
+            address=lambda cell:mapping['cells'][cell] if mapping else cell
+            disk_tables = {cell: wb.value(sheet,address(cell)) for s in scenarios() for cell in s['targets']}
+            disk_base = {cell: wb.value(sheet,address(cell)) for cell in BASE_REFS}
         finally:
             wb.close()
         if disk_tables != native.get('persisted_tables') or disk_base != native.get('persisted_base_outputs'):
             raise ValueError('Les caches enregistrés ne correspondent pas aux valeurs relues dans Excel.')
         comparison = compare_results(plan, native)
+        _check_deadline(deadline)
         result = {**native, **comparison, 'schema': 'tca-sensitivity-receipt/1', 'algorithm': ALGORITHM,
                   'model_id': engine.model_id, 'template_sha256': plan['template_sha256'],
                   'input_signature_before': plan['input_signature'], 'input_signature_after': after['input_signature'],
@@ -461,12 +498,5 @@ def verify_native(engine, source: Path, output: Path, receipt: Path, *, timeout=
             'restoration': 'ISOLATION_PAR_COPIES_BASE_JAMAIS_CHOQUEE'})
         raise
     finally:
-        try:
-            if not complete and owned:
-                owned.terminate()
-            if process.poll() is None:
-                process.kill()
-            process.wait(timeout=10)
-        finally:
-            if owned:
-                owned.close()
+        from .native_cleanup import finish_native_process
+        finish_native_process(process, owned, complete)

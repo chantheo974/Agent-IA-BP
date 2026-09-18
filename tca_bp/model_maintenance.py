@@ -1,5 +1,6 @@
 """Scellement de variantes réservé au dépôt de développement TCA."""
 from __future__ import annotations
+from .model_components import component_path, component_exists, read_component
 import copy
 import datetime as dt
 import json
@@ -95,7 +96,7 @@ def reseal_variant(self, workbook: Path, output_dir: Path, model_id: str, expect
         template=out/self.template_path.name
         with template.open('xb') as handle:handle.write(after.bytes)
         dump(out/'modele.json',schema);dump(out/'catalogue_champs.json',schema['fields'])
-        graph=json.loads((self.model_dir/'graphe_dependances.json').read_text(encoding='utf-8'))
+        graph=json.loads(read_component(self.model_dir/'graphe_dependances.json'))
         for cell in graph['cells']:
             key=(cell['sheet'],cell['cell'])
             if key in observed:

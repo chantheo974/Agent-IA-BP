@@ -4,6 +4,7 @@ Le catalogue du moteur reste l'autorité pour les cellules et les choix possible
 Ce module décrit les responsabilités métier ; il n'accorde aucun droit d'écriture.
 """
 from __future__ import annotations
+from .model_components import component_path, component_exists, read_component
 
 from copy import deepcopy
 import hashlib
@@ -283,7 +284,7 @@ def load_model_graph(engine, extra_nodes=()) -> dict:
     injected = getattr(engine, 'dependency_graph', None)
     model_dir = getattr(engine, 'model_dir', None)
     path = Path(model_dir) / 'graphe_dependances.json' if model_dir else None
-    if injected is None and (path is None or not path.is_file()):
+    if injected is None and (path is None or not component_exists(path)):
         return {'available': False, 'sheets': {}, 'key_nodes': {}, 'defined_names': [],
                 'native_tables': [], 'macro': {}, 'limits': ['Graphe extrait absent : impact aval non déterminé.'],
                 'source': str(path) if path else None, 'sha256': None}
@@ -291,7 +292,7 @@ def load_model_graph(engine, extra_nodes=()) -> dict:
         raw = deepcopy(injected)
         payload = json.dumps(raw, sort_keys=True, ensure_ascii=False).encode('utf-8')
     else:
-        payload = path.read_bytes()
+        payload = read_component(path)
         raw = json.loads(payload)
     if raw.get('model_id') != engine.model_id:
         raise ValueError('Le graphe ne correspond pas à la version du modèle.')
