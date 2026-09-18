@@ -5,6 +5,7 @@ Le support présent porte sur les formules ordinaires existantes. Les structures
 macros et tables natives nécessitent un autre développement explicitement testé.
 """
 from __future__ import annotations
+from .model_components import component_path, component_exists, read_component
 
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -56,8 +57,8 @@ class Maintenance:
     def _impact(self, sheets):
         graph_path = Path(getattr(self.engine, "model_dir", self.engine.template_path.parent)) / "graphe_dependances.json"
         basis = "CONTRATS_METIER_CONSERVATEURS"
-        if graph_path.is_file():
-            graph = json.loads(graph_path.read_text(encoding="utf-8"))["sheets"]
+        if component_exists(graph_path):
+            graph = json.loads(read_component(graph_path))["sheets"]
             basis = "GRAPHE_EXTRAIT_MODELE; références dynamiques et VBA à qualifier séparément"
         else:
             graph = {spec["sheet"]: spec["dependencies"] for spec in contracts()}

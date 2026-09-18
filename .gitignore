@@ -30,3 +30,16 @@ models/generic-*/
 models/versions/
 models/maintenance/
 *.log
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+web_settings.json
+exports_conversations/
+*.tsbuildinfo
+models/web-initial/
+.next/
+.vinext/
+.wrangler/
+# Original fourni, préservé localement ; copie intégrée publiée dans frontend/src/cockpit.
+/visuel web test/

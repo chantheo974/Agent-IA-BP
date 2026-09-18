@@ -178,9 +178,5 @@ def recalculate(source: Path, output: Path, receipt: Path, *, include_tables: bo
                     'output_exists':output.exists()})
         raise
     finally:
-        try:
-            if not complete and owned:owned.terminate()
-            if process.poll() is None:process.kill()
-            process.wait(timeout=10)
-        finally:
-            if owned:owned.close()
+        from .native_cleanup import finish_native_process
+        finish_native_process(process, owned, complete)

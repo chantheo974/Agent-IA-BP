@@ -1,6 +1,7 @@
 {
   "version": "0.2.0",
   "configurations": [
+    {"name": "TCA BP — atelier web", "type": "debugpy", "request": "launch", "module": "tca_bp.web_server", "console": "integratedTerminal"},
     {"name": "TCA BP — application", "type": "debugpy", "request": "launch", "module": "tca_bp", "args": ["gui"], "console": "integratedTerminal"},
     {"name": "TCA BP — diagnostic", "type": "debugpy", "request": "launch", "module": "tca_bp", "args": ["doctor"], "console": "integratedTerminal"}
   ]

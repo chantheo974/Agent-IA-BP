@@ -65,18 +65,33 @@ def error_perimeter(sheet: str, address: str, years: int) -> tuple[str, bool]:
     if not isinstance(years, int) or isinstance(years, bool) or not 1 <= years <= 10:
         return scope, True
     annual = None
+    if sheet == 'Sensi TCA' and 19 <= row <= 23 and 3 <= col <= 8:
+        return scope, row - 19 < years  # B19:B23, one calendar year per row.
     if sheet == 'Valorisation' and 19 <= row <= 33:
         annual = (4, 13)
     elif sheet == 'ATELIER_CIR_IS' and 14 <= row <= 134:
         annual = (3, 13)
+        # These rows use N50:EO50 (132 successive month ends). A settlement
+        # for a prior fiscal year remains active when its payment month is
+        # inside the selected calendar; only dates after the horizon are out.
+        if 51 <= row <= 134 and 14 <= col <= 145:
+            return scope, col - 14 < years * 12
     elif sheet == 'CALCUL_CIR' and 16 <= row <= 46:
         annual = (3, 13)
-    elif sheet == 'Compte de Résultat' and 7 <= row <= 85:
-        annual = (4, 13)
+    elif sheet == 'Compte de Résultat' and 7 <= row <= 87:
+        annual = (4, 14)  # D5:N5, including the original eleventh year.
+    elif sheet == 'Bilan' and 4 <= row <= 59:
+        annual = (4, 14)  # D2:N2; opening column C remains active.
+    elif sheet == 'Flux de trésorerie' and 5 <= row <= 47:
+        annual = (4, 14)  # D4:N4.
+    elif sheet == 'Plan de financement' and 7 <= row <= 44:
+        annual = (4, 14)  # D6:N6.
+    elif sheet == 'Contrôles' and 12 <= row <= 24:
+        annual = (3, 13)  # C11:M11; column N aggregates remain active.
     elif sheet in ('Revenue', 'Contrats') and row >= 7:
         annual = (5, 14)
     elif sheet == 'Modèle financier' and row >= 4:
-        annual = (3, 12)
+        annual = (3, 13)  # C3:M3; original eleventh year is outside max10.
         if 20 <= col <= 151:
             return scope, col - 20 < years * 12
     if annual and annual[0] <= col <= annual[1]:
@@ -145,7 +160,7 @@ def collect_snapshot(workbook, schema: dict) -> dict:
     registers = {}
     for sheet, spec in schema.get('registers', {}).items():
         occupied = []
-        for row in range(spec['start_row'], spec['end_row'] + 1):
+        for row in [*range(spec['start_row'], spec['end_row'] + 1), *spec.get('extra_rows', [])]:
             if any(not _blank(cells.get(f'{sheet}!{col}{row}', {}).get('value'))
                    and cells.get(f'{sheet}!{col}{row}', {}).get('formula') is None
                    for col in spec['identity_columns']):
@@ -161,7 +176,7 @@ def collect_snapshot(workbook, schema: dict) -> dict:
             default_owners[f'DATA CAPEX!F{row}'] = [f'DATA CAPEX!C{row}', f'Assumptions!C{catalog_row}']
             default_owners[f'DATA CAPEX!H{row}'] = [f'DATA CAPEX!G{row}'] if cells.get(f'DATA CAPEX!G{row}', {}).get('value') == 'Non' else [f'DATA CAPEX!G{row}', f'Assumptions!D{catalog_row}']
         default_owners[f'DATA CAPEX!M{row}'] = [f'DATA CAPEX!B{row}', f'DATA CAPEX!C{row}']
-    for row in range(15, 28):
+    for row in schema.get('offer_rows',range(15,28)):
         for col in ('G', 'H', 'I', 'J', 'AF', 'AG', 'AH', 'AI', 'AJ'):
             default_owners[f'Assumptions!{col}{row}'] = [f'Assumptions!F{row}', 'Assumptions!D5']
     closing_type = workbook.value('Assumptions', 'B134')
@@ -174,6 +189,7 @@ def collect_snapshot(workbook, schema: dict) -> dict:
             'template_sha256': schema.get('template_sha256'), 'source_sha256': workbook.hash,
             'input_signature': workbook.input_signature(schema), 'date1904': workbook.date1904,
             'cells': cells, 'registers': registers, 'default_owners': default_owners,
+            'offer_rows':schema.get('offer_rows',list(range(15,28))),
             'closing': {'category': closing_type, 'rows': closing_rows}, 'diagnostics': diagnostics}
 
 
@@ -320,7 +336,7 @@ def evaluate(snapshot: dict, field_states: dict, verified_source_ids, *, module_
             require(scope, 'Sensi TCA', col + '77')
     count = int(years) if valid_years else 0
     year_columns = 'CDEFGHIJKL'[:count]
-    offers = [row for row in range(15, 28) if value('Assumptions', 'C' + str(row)) == 1]
+    offers = [row for row in snapshot.get('offer_rows',range(15,28)) if value('Assumptions', 'C' + str(row)) == 1]
     registers = snapshot.get('registers', {})
     contract_rows = registers.get('DATA Contrats', {}).get('occupied_rows', [])
     if not offers and not contract_rows:
@@ -331,7 +347,7 @@ def evaluate(snapshot: dict, field_states: dict, verified_source_ids, *, module_
         modules['CA'] = 'ACTIF'
         if declarations.get('CA', {}).get('state') == 'INACTIF':
             declaration('CA', 'CA', has_activity=True)
-    for row in range(15, 28):
+    for row in snapshot.get('offer_rows',range(15,28)):
         flag = value('Assumptions', 'C' + str(row))
         if flag not in (0, 1) or isinstance(flag, bool):
             reason('CA', 'ACTIVATION_OFFRE_INCONNUE', 'Activation de l’offre à renseigner.', f'Assumptions!C{row}')

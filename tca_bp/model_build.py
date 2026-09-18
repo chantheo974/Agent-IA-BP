@@ -476,7 +476,52 @@ def _protect_inputs(raw,addresses):
     return raw
 
 
+def _materialize_orphaned_shared_formulas(raw, original_formula):
+    """Keep unchanged followers valid when maintenance replaced their anchor.
+
+    Only shared groups whose anchor is absent from the transformed worksheet
+    are expanded. Each follower retains its original effective formula: the
+    cell transformation already materialized every changed member separately.
+    Unaffected shared groups, array formulas and data tables stay untouched.
+    """
+    if b'shared' not in raw:
+        return raw
+    root = ET.fromstring(raw)
+    groups = {}; anchors = set()
+    for cell in root.findall('.//m:sheetData/m:row/m:c', N):
+        formula = cell.find('m:f', N)
+        if formula is None or formula.get('t') != 'shared':
+            continue
+        index = formula.get('si')
+        if index is None:
+            raise ValueError('Formule partagée sans identifiant de groupe.')
+        groups.setdefault(index, []).append(cell.get('r'))
+        if formula.text:
+            anchors.add(index)
+    addresses = {address for index, cells in groups.items() if index not in anchors for address in cells}
+    if not addresses:
+        return raw
+    def materialize(match):
+        address = match[1].decode()
+        if address not in addresses:
+            return match[0]
+        formula = original_formula(address)
+        if not isinstance(formula, str) or not formula:
+            raise ValueError('Formule effective source absente pour le membre partagé ' + address)
+        return _new_cell(match[0], None, formula=formula)
+    updated = core.CELL_RX.sub(materialize, raw)
+    if updated == raw:
+        raise ValueError('Membres partagés non matérialisés après retrait de leur ancre.')
+    return updated
+
+
 def build_model(project_root: Path, output_dir: Path|None=None, *, force=False) -> dict:
+    from contextlib import ExitStack
+    with ExitStack() as cleanup:
+        return _build_model(project_root,output_dir,force=force,cleanup=cleanup)
+
+
+def _build_model(project_root: Path, output_dir: Path|None=None, *, force=False,cleanup) -> dict:
     from .model_qualification_guards import guard_formula, remove_inherited_protection_credentials
     root=Path(project_root).resolve();out=Path(output_dir or root/'models'/'generic-v1').resolve()
     if out==root or root/'exemple'==out or (root/'exemple') in out.parents:
@@ -485,7 +530,9 @@ def build_model(project_root: Path, output_dir: Path|None=None, *, force=False) 
     if (out/'build_receipt.json').exists() and not force:
         return json.loads((out/'build_receipt.json').read_text(encoding='utf-8'))
     source,seed=_source_assets(root);before_hash=core.sha(source.read_bytes());wb=core.Workbook(source)
-    vba_audit=_audit_vba(wb.z.read('xl/vbaProject.bin'))
+    cleanup.callback(wb.close)
+    source_vba=wb.z.read('xl/vbaProject.bin')
+    vba_audit=_audit_vba(source_vba)
     mapping,migration_records=_migrations(wb);schema=_schema(seed,wb,mapping)
     policies=[];formula_records=[];sheet_graph={};replacements={};removed=set()
     additions={(s,a) for s,cs in schema['cells'].items() for a in cs if a not in seed['cells'].get(s,{})}
@@ -564,6 +611,7 @@ def build_model(project_root: Path, output_dir: Path|None=None, *, force=False) 
                 else:raw=raw.replace(b'<c ',b'<c s="'+style+b'" ',1)
             return raw
         raw=core.CELL_RX.sub(replace,wb.z.read(sh['part']))
+        raw=_materialize_orphaned_shared_formulas(raw,lambda address:wb.formula(sheet,address))
         raw=remove_inherited_protection_credentials(raw)
         raw=re.sub(rb'<hyperlinks\b[^>]*>.*?</hyperlinks>',b'',raw,flags=re.S)
         raw=re.sub(rb'<(?:headerFooter|legacyDrawingHF)\b[^>]*?(?:/>|>.*?</(?:headerFooter|legacyDrawingHF)>)',b'',raw,flags=re.S)
@@ -656,7 +704,7 @@ def build_model(project_root: Path, output_dir: Path|None=None, *, force=False) 
     dump(out/'graphe_dependances.json',{'schema':'tca-bp-dependencies/v1','sheets':sheet_graph,'cells':formula_records,
          'defined_names':[dict(n.attrib,text=n.text or '') for n in ET.fromstring(replacements['xl/workbook.xml']).findall('m:definedNames/m:definedName',N)],
          'native_tables':[{'sheet':'Sensi Analyses','range':'D25:G33','inputs':['C18']}, {'sheet':'Sensi Analyses','range':'C40:D45','inputs':['C8']},{'sheet':'Sensi Analyses','range':'D50:F52','inputs':['C14','C8']}],
-         'macro':{'preserved':True,'sha256':core.sha(replacements.get('xl/vbaProject.bin',zipfile.ZipFile(source).read('xl/vbaProject.bin'))),'outputs':schema['native_outputs'],'executed':False},
+         'macro':{'preserved':True,'sha256':core.sha(replacements.get('xl/vbaProject.bin',source_vba)),'outputs':schema['native_outputs'],'executed':False},
          'limits':['String-based references and macro dependencies need native qualification','Fiscal annual rules inherited require explicit jurisdiction and date review']})
     dump(out/'modele.json',schema)
     receipt={'schema':'tca-bp-build/v1','model_id':MODEL_ID,'build_version':BUILD_VERSION,'template_path':str(template),
@@ -665,6 +713,8 @@ def build_model(project_root: Path, output_dir: Path|None=None, *, force=False) 
              'counts':counts,'vba_static_audit':vba_audit,'privacy_audit':privacy_audit,'financial_results_status':'UNAVAILABLE','native_calculation':'NOT_EXECUTED',
              'created_utc':dt.datetime.now(dt.timezone.utc).isoformat(),
              'limitations':['No statutory rate or eligibility is assumed for a new dossier','Formula-level native behavior and VBA execution require native validation','Legacy technical WACC namespace retained for binary compatibility']}
-    dump(out/'build_receipt.json',receipt)
+    # Le reçu vaut preuve de construction complète : une reconstruction ultérieure
+    # s'arrête sur sa seule présence. Il n'est publié qu'après le graphe.
     refresh_dependency_graph(out)
+    dump(out/'build_receipt.json',receipt)
     return receipt

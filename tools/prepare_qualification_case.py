@@ -34,7 +34,9 @@ def prepare(model_dir: Path | None = None, expected_sha256: str | None = None) -
     model_dir = model_dir.resolve()
     if len(expected_sha256) != 64 or any(c not in '0123456789abcdef' for c in expected_sha256):
         raise ValueError('Empreinte SHA-256 attendue invalide.')
-    engine = ModelEngine(ROOT, model_dir)
+    from tca_bp.web_model import ProfileEngine
+    engine_class = ProfileEngine if (model_dir / 'web_profile.json').is_file() else ModelEngine
+    engine = engine_class(ROOT, model_dir)
     if digest(engine.template_path) != expected_sha256:
         raise ValueError('La recette attend la version finale explicitement désignée ; aucun modèle choisi implicitement.')
     case = cases()[0]
@@ -116,7 +118,7 @@ def prepare(model_dir: Path | None = None, expected_sha256: str | None = None) -
               'runtime_dir': str(folder), 'case_id': case_id, 'model_dir': str(model_dir), 'model_sha256': expected_sha256,
               'source_sha256': applied['output_sha256'], 'native_executed': False, 'sources': sources,
               'case_revision': app.get_case(case_id)['revision'], 'updates_count': len(updates), 'issues': issues, 'oracles_after_wacc': oracles,
-              'next_operation': 'Application(..., engine=ModelEngine(root, model_dir)).solve_wacc(case_id)',
+              'next_operation': 'Application(..., engine=ProfileEngine(root, model_dir) if web_profile.json exists else ModelEngine(root, model_dir)).solve_wacc(case_id)',
               'note': 'Recette fictive privée. Aucun résultat disponible avant preuve native ; aucune publication ni modification des originaux.'}
     atomic_json(folder / 'preparation.json', result)
     if expected_only:

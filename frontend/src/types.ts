@@ -1,0 +1,13 @@
+export type CellValue = string | number | boolean | null;
+export type Case = { id: string; name: string; client_name?: string; revision?: number; model_id?: string; model_ref?: string; calculation_status?: string; [key: string]: unknown };
+export type Sheet = { name: string; rows: number; columns: number; role?: string };
+export type Cell = { cell: string; row: number; column: number; value: CellValue; formula?: string | null; display?: string; source?: string; state?: string; format?: string; calculation_status?: string; editable?: boolean };
+export type Source = { id: string; title: string; kind?: string; created_at?: string; [key: string]: unknown };
+export type Agent = { id: string; sheet: string; role: string; questions?: unknown[] };
+export type Operation = { type: string; sheet?: string; cell?: string; value?: CellValue; formula?: string; index?: number; count?: number; name?: string; role?: string; evidence_id?: string; [key: string]: unknown };
+export type Scope = { sheet: string; sheets?: string[]; range?: string; allow_structure?: boolean };
+export type Draft = { id?: string; revision?: number; status?: string; approval_token?: string | null; operations?: Operation[]; changes?: unknown[]; diagnostics?: unknown; conflicts?: { index: number; existing: unknown; incoming: unknown }[]; [key: string]: unknown };
+export type Message = { id: string; role: string; content: string; agents?: (Agent | string)[]; created_at?: string; status?: string };
+export type Job = { id: string; kind: string; status: string; progress?: unknown; result?: unknown; error?: unknown; created_at?: string };
+export type Version = { id: string; revision?: number; kind?: string; created_at?: string; current?: boolean; sha256?: string };
+export type Settings = { base_url?: string; model?: string; api_key_configured?: boolean; models?: string[] };

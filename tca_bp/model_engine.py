@@ -11,6 +11,7 @@ import re
 import tempfile
 import zipfile
 from xml.etree import ElementTree as ET
+from .model_components import read_component
 from .model_runtime import MODEL_ID, invalidate_caches, invalidate_chart
 from .vendor import input_engine as core
 
@@ -56,7 +57,7 @@ class ModelEngine:
             build_model(self.project_root,self.model_dir)
         try:
             receipt=json.loads(path.read_text(encoding='utf-8'))
-            raw=(self.model_dir/'modele.json').read_bytes()
+            raw=read_component(self.model_dir/'modele.json')
             if core.sha(raw)!=receipt['schema_sha256']:raise ValueError('Le manifeste généré a changé. Reconstruire une version contrôlée du modèle.')
             if core.sha(self.template_path.read_bytes())!=receipt['template_sha256']:raise ValueError('La trame générique a changé. La référence de modèle doit rester immuable.')
             schema=json.loads(raw)
@@ -104,9 +105,11 @@ class ModelEngine:
                     finally:reference.close()
             if actual!=self._protection_signature:raise ValueError('Protections de cellules modifiées : la saisie requiert une trame conforme.')
             return wb
-        except (OSError,KeyError,TypeError,ValueError,zipfile.BadZipFile) as exc:
+        except BaseException as exc:
             if wb:wb.close()
-            raise ValueError(str(exc)) from exc
+            if isinstance(exc,(OSError,KeyError,TypeError,ValueError,IndexError,ET.ParseError,zipfile.BadZipFile)):
+                raise ValueError(str(exc)) from exc
+            raise
 
     def _cell_protection_signature(self,wb):
         """Compare effective cell locks, not unstable Excel style indices."""

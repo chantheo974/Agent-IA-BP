@@ -57,7 +57,12 @@ def remove_inherited_protection_credentials(raw):
     """
     names = (b'password|algorithmName|hashValue|saltValue|spinCount|workbookPassword|revisionsPassword|'
              b'workbookAlgorithmName|workbookHashValue|workbookSaltValue|workbookSpinCount|'
-             b'revisionsAlgorithmName|revisionsHashValue|revisionsSaltValue|revisionsSpinCount')
+             b'revisionsAlgorithmName|revisionsHashValue|revisionsSaltValue|revisionsSpinCount|'
+             b'reservationPassword|securityDescriptor|userName')
     def clean(match):
-        return re.sub(rb'\s+(?:' + names + rb')="[^"]*"', b'', match[0])
-    return re.sub(rb'<(?:\w+:)?(?:sheetProtection|workbookProtection)\b[^>]*>', clean, raw)
+        return re.sub(rb'\s+(?:\w+:)?(?:' + names + rb''')\s*=\s*(?:"[^"]*"|'[^']*')''', b'', match[0])
+    # Range passwords/ACLs and write-reservation credentials are independent
+    # of sheet/workbook protection. Keep ranges and protection/read-only flags,
+    # but never distribute inherited credentials or the original sharing user.
+    tag=rb'''<(?:\w+:)?(?:sheetProtection|workbookProtection|protectedRange|fileSharing)\b(?:[^"'>]|"[^"]*"|'[^']*')*>'''
+    return re.sub(tag, clean, raw)

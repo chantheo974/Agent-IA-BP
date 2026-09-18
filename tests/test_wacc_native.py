@@ -120,7 +120,10 @@ class FakeWorker:
         pass
 
     def close(self):
-        pass
+        self.input_closed=True
+        if self.returncode is None:
+            self.returncode=0
+            self.events.put(None)
 
     def wait(self, timeout=None):
         if self.returncode is None:
@@ -176,6 +179,21 @@ class NativeProtocolTests(unittest.TestCase):
         ownership.assert_called_once_with(31415)
         self.assertFalse(self.owned.terminated)
         self.assertTrue(self.owned.closed)
+        progress=json.loads(self.receipt.with_name('receipt.progress.json').read_text(encoding='utf-8'))
+        self.assertEqual(progress['phase'],'COMPLETE');self.assertEqual(len(progress['observations']),2)
+        self.assertNotIn('immutable-test-inputs',json.dumps(progress))
+
+    def test_interrupted_solver_keeps_the_last_observation_without_input_fingerprint(self):
+        worker=FakeWorker(self.source,self.output,self.receipt)
+        def interrupted(evaluate,*args,**kwargs):
+            evaluate(.12)
+            raise TimeoutError('Bounded fictitious interruption')
+        with self.assertRaises(TimeoutError):self._run(worker,solver=interrupted)
+        progress=json.loads(self.receipt.with_name('receipt.progress.json').read_text(encoding='utf-8'))
+        self.assertEqual(progress['phase'],'ERROR');self.assertEqual(len(progress['observations']),1)
+        self.assertEqual(progress['observations'][0]['calculated'],.12)
+        self.assertNotIn('immutable-test-inputs',json.dumps(progress))
+        self.assertTrue(self.owned.terminated);self.assertFalse(self.output.exists())
 
     def test_preexisting_excel_is_never_owned_acknowledged_or_terminated(self):
         worker = FakeWorker(self.source, self.output, self.receipt, pid=31415)
@@ -184,7 +202,8 @@ class NativeProtocolTests(unittest.TestCase):
         self.assertEqual(worker.sent, [])
         self.assertFalse(self.owned.terminated)
         self.assertFalse(self.owned.closed)
-        self.assertTrue(worker.killed)
+        self.assertTrue(worker.input_closed)
+        self.assertFalse(worker.killed)
         self.assertEqual(digest(self.source), self.source_sha)
         self.assertFalse(self.output.exists())
 

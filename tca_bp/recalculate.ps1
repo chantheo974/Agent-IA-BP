@@ -47,10 +47,14 @@ public static class TcaRecalculationWindow {
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 }
 '@
+    $previousExcelPids = @(Get-Process -Name EXCEL -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+    $createdDedicated = $false
     $excelInstance = New-Object -ComObject Excel.Application
     [uint32]$ownedExcelPid = 0
     [void][TcaRecalculationWindow]::GetWindowThreadProcessId([IntPtr]$excelInstance.Hwnd, [ref]$ownedExcelPid)
     if ($ownedExcelPid -eq 0) { throw 'Processus Excel dédié non identifié.' }
+    $createdDedicated = $ownedExcelPid -gt 0 -and ($previousExcelPids -notcontains [int]$ownedExcelPid)
+    if (-not $createdDedicated) { throw 'Instance Excel existante : aucun droit de fermeture.' }
     Emit @{event='owned_process'; pid=$ownedExcelPid}
     $ack = [Console]::ReadLine()
     if ($null -eq $ack -or ($ack | ConvertFrom-Json).operation -ne 'ownership_confirmed') {
@@ -108,7 +112,7 @@ public static class TcaRecalculationWindow {
     try { CloseBook }
     finally {
         if ($null -ne $excelInstance) {
-            try { if ($ownedConfirmed) { $excelInstance.Quit() } }
+            try { if ($ownedConfirmed -or $createdDedicated) { $excelInstance.Quit() } }
             finally { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($excelInstance) }
         }
         [GC]::Collect(); [GC]::WaitForPendingFinalizers()

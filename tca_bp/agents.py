@@ -4,6 +4,7 @@ Aucune méthode de ce module n'écrit un classeur. Le service de dossier décide
 la validation humaine et de la transaction, puis appelle le moteur central.
 """
 from __future__ import annotations
+from .model_components import component_path, component_exists, read_component
 
 from copy import deepcopy
 from datetime import date, datetime, timedelta
@@ -80,7 +81,8 @@ class Coordinator:
 
     def __init__(self, engine):
         self.engine = engine
-        self._agents = contracts()
+        profile = getattr(engine, 'profile', None)
+        self._agents = deepcopy([agent for agent in profile['agents'] if not agent.get('deleted')]) if isinstance(profile, dict) else contracts()
         self._by_sheet = {agent["sheet"]: agent for agent in self._agents}
         self._graph_cache = None
         self._graph_key = None
@@ -88,7 +90,7 @@ class Coordinator:
     def _dependency_graph(self, extra_nodes=()) -> dict:
         model_dir = getattr(self.engine, 'model_dir', None)
         path = Path(model_dir) / 'graphe_dependances.json' if model_dir else None
-        stamp = path.stat() if path and path.is_file() else None
+        stamp = component_path(path).stat() if path and component_exists(path) else None
         key = (self.engine.model_id, str(path), stamp.st_mtime_ns if stamp else None,
                stamp.st_size if stamp else None)
         injected = getattr(self.engine, 'dependency_graph', None) is not None

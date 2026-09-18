@@ -4,16 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tca-bp"
-version = "0.2.0"
+version = "0.5.0"
 description = "Préparation et pilotage de business plans TCA sur copies Excel contrôlées"
 requires-python = ">=3.14"
-dependencies = ["pypdf>=6.18,<7"]
+dependencies = ["pypdf>=6.18,<7", "fastapi>=0.135,<1", "uvicorn>=0.34,<1", "httpx>=0.28,<1", "python-multipart>=0.0.22,<1", "python-docx>=1.2,<2", "python-pptx>=1.0,<2", "reportlab>=4.4,<5", "Pillow>=11,<14", "pypdfium2>=4.30,<6"]
 
 [project.scripts]
 tca-bp = "tca_bp.__main__:main"
+tca-bp-web = "tca_bp.web_server:main"
 
 [tool.setuptools.packages.find]
 include = ["tca_bp*"]
 
 [tool.setuptools.package-data]
-tca_bp = ["*.ps1", "vendor/*.md", "vendor/vendor/olefile/*.txt", "vendor/vendor/olefile/*.json"]
+tca_bp = ["*.ps1", "resources/*.json", "vendor/*.md", "vendor/vendor/olefile/*.txt", "vendor/vendor/olefile/*.json"]
